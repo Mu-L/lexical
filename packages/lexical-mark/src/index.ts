@@ -1,4 +1,3 @@
-/** @module @lexical/mark */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -123,6 +122,13 @@ export function $wrapSelectionInMarkNode(
       currentNodeParent = undefined;
       lastCreatedMarkNode = undefined;
     }
+  }
+  // Make selection collapsed at the end
+  if ($isElementNode(lastCreatedMarkNode)) {
+    // eslint-disable-next-line no-unused-expressions
+    isBackward
+      ? lastCreatedMarkNode.selectStart()
+      : lastCreatedMarkNode.selectEnd();
   }
 }
 

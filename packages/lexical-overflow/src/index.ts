@@ -1,4 +1,3 @@
-/** @module @lexical/overflow */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -10,21 +9,14 @@
 import type {
   EditorConfig,
   LexicalNode,
-  NodeKey,
   RangeSelection,
   SerializedElementNode,
-  Spread,
 } from 'lexical';
 
-import {ElementNode} from 'lexical';
+import {$applyNodeReplacement, ElementNode} from 'lexical';
+import invariant from 'shared/invariant';
 
-export type SerializedOverflowNode = Spread<
-  {
-    type: 'overflow';
-    version: 1;
-  },
-  SerializedElementNode
->;
+export type SerializedOverflowNode = SerializedElementNode;
 
 /** @noInheritDoc */
 export class OverflowNode extends ElementNode {
@@ -37,23 +29,11 @@ export class OverflowNode extends ElementNode {
   }
 
   static importJSON(serializedNode: SerializedOverflowNode): OverflowNode {
-    return $createOverflowNode();
+    return $createOverflowNode().updateFromJSON(serializedNode);
   }
 
   static importDOM(): null {
     return null;
-  }
-
-  constructor(key?: NodeKey) {
-    super(key);
-    this.__type = 'overflow';
-  }
-
-  exportJSON(): SerializedElementNode {
-    return {
-      ...super.exportJSON(),
-      type: 'overflow',
-    };
   }
 
   createDOM(config: EditorConfig): HTMLElement {
@@ -65,22 +45,34 @@ export class OverflowNode extends ElementNode {
     return div;
   }
 
-  updateDOM(prevNode: OverflowNode, dom: HTMLElement): boolean {
+  updateDOM(prevNode: this, dom: HTMLElement): boolean {
     return false;
   }
 
-  insertNewAfter(selection: RangeSelection): null | LexicalNode {
+  insertNewAfter(
+    selection: RangeSelection,
+    restoreSelection = true,
+  ): null | LexicalNode {
     const parent = this.getParentOrThrow();
-    return parent.insertNewAfter(selection);
+    return parent.insertNewAfter(selection, restoreSelection);
   }
 
   excludeFromCopy(): boolean {
     return true;
   }
+
+  static transform(): (node: LexicalNode) => void {
+    return (node: LexicalNode) => {
+      invariant($isOverflowNode(node), 'node is not a OverflowNode');
+      if (node.isEmpty()) {
+        node.remove();
+      }
+    };
+  }
 }
 
 export function $createOverflowNode(): OverflowNode {
-  return new OverflowNode();
+  return $applyNodeReplacement(new OverflowNode());
 }
 
 export function $isOverflowNode(

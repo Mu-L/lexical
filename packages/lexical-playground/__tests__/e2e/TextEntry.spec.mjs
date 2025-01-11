@@ -48,6 +48,28 @@ test.describe('TextEntry', () => {
     });
   });
 
+  test(`Can insert text and replace it`, async ({isCollab, page}) => {
+    test.skip(isCollab);
+    await page.locator('[data-lexical-editor]').fill('Front');
+    await page.locator('[data-lexical-editor]').fill('Front updated');
+    await assertHTML(
+      page,
+      html`
+        <p
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
+          dir="ltr">
+          <span data-lexical-text="true">Front updated</span>
+        </p>
+      `,
+    );
+    await assertSelection(page, {
+      anchorOffset: 13,
+      anchorPath: [0, 0, 0],
+      focusOffset: 13,
+      focusPath: [0, 0, 0],
+    });
+  });
+
   test(`Can type 'Hello' as a header and insert a paragraph before`, async ({
     page,
     isPlainText,
@@ -619,7 +641,6 @@ test.describe('TextEntry', () => {
           <p class="PlaygroundEditorTheme__paragraph"><br /></p>
         `,
       );
-      await page.pause();
       await assertSelection(page, {
         anchorOffset: 0,
         anchorPath: [1],

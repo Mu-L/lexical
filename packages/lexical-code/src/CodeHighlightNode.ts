@@ -6,44 +6,37 @@
  *
  */
 
-// eslint-disable-next-line simple-import-sort/imports
-import {
-  $isLineBreakNode,
+import type {
   EditorConfig,
   EditorThemeClasses,
   LexicalNode,
+  LexicalUpdateJSON,
+  LineBreakNode,
   NodeKey,
   SerializedTextNode,
   Spread,
-  TextNode,
+  TabNode,
 } from 'lexical';
-
-import * as Prism from 'prismjs';
-
-import 'prismjs/components/prism-clike';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-objectivec';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-swift';
 
 import {
   addClassNamesToElement,
   removeClassNamesFromElement,
 } from '@lexical/utils';
+import {
+  $applyNodeReplacement,
+  $isTabNode,
+  ElementNode,
+  TextNode,
+} from 'lexical';
+
+import {Prism} from './CodeHighlighterPrism';
+import {$createCodeNode} from './CodeNode';
 
 export const DEFAULT_CODE_LANGUAGE = 'javascript';
 
 type SerializedCodeHighlightNode = Spread<
   {
     highlightType: string | null | undefined;
-    type: 'code-highlight';
-    version: 1;
   },
   SerializedTextNode
 >;
@@ -51,25 +44,32 @@ type SerializedCodeHighlightNode = Spread<
 export const CODE_LANGUAGE_FRIENDLY_NAME_MAP: Record<string, string> = {
   c: 'C',
   clike: 'C-like',
+  cpp: 'C++',
   css: 'CSS',
   html: 'HTML',
+  java: 'Java',
   js: 'JavaScript',
   markdown: 'Markdown',
   objc: 'Objective-C',
   plain: 'Plain Text',
+  powershell: 'PowerShell',
   py: 'Python',
   rust: 'Rust',
   sql: 'SQL',
   swift: 'Swift',
+  typescript: 'TypeScript',
   xml: 'XML',
 };
 
 export const CODE_LANGUAGE_MAP: Record<string, string> = {
+  cpp: 'cpp',
+  java: 'java',
   javascript: 'js',
   md: 'markdown',
   plaintext: 'plain',
   python: 'py',
   text: 'plain',
+  ts: 'typescript',
 };
 
 export function normalizeCodeLang(lang: string) {
@@ -98,7 +98,7 @@ export class CodeHighlightNode extends TextNode {
   __highlightType: string | null | undefined;
 
   constructor(
-    text: string,
+    text: string = '',
     highlightType?: string | null | undefined,
     key?: NodeKey,
   ) {
@@ -123,6 +123,16 @@ export class CodeHighlightNode extends TextNode {
     return self.__highlightType;
   }
 
+  setHighlightType(highlightType?: string | null | undefined): this {
+    const self = this.getWritable();
+    self.__highlightType = highlightType || undefined;
+    return self;
+  }
+
+  canHaveFormat(): boolean {
+    return false;
+  }
+
   createDOM(config: EditorConfig): HTMLElement {
     const element = super.createDOM(config);
     const className = getHighlightThemeClass(
@@ -133,11 +143,7 @@ export class CodeHighlightNode extends TextNode {
     return element;
   }
 
-  updateDOM(
-    prevNode: CodeHighlightNode,
-    dom: HTMLElement,
-    config: EditorConfig,
-  ): boolean {
+  updateDOM(prevNode: this, dom: HTMLElement, config: EditorConfig): boolean {
     const update = super.updateDOM(prevNode, dom, config);
     const prevClassName = getHighlightThemeClass(
       config.theme,
@@ -161,29 +167,35 @@ export class CodeHighlightNode extends TextNode {
   static importJSON(
     serializedNode: SerializedCodeHighlightNode,
   ): CodeHighlightNode {
-    const node = $createCodeHighlightNode(
-      serializedNode.text,
-      serializedNode.highlightType,
-    );
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
+    return $createCodeHighlightNode().updateFromJSON(serializedNode);
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedCodeHighlightNode>,
+  ): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setHighlightType(serializedNode.highlightType);
   }
 
   exportJSON(): SerializedCodeHighlightNode {
     return {
       ...super.exportJSON(),
       highlightType: this.getHighlightType(),
-      type: 'code-highlight',
-      version: 1,
     };
   }
 
   // Prevent formatting (bold, underline, etc)
   setFormat(format: number): this {
     return this;
+  }
+
+  isParentRequired(): true {
+    return true;
+  }
+
+  createParentElementNode(): ElementNode {
+    return $createCodeNode();
   }
 }
 
@@ -200,10 +212,10 @@ function getHighlightThemeClass(
 }
 
 export function $createCodeHighlightNode(
-  text: string,
+  text: string = '',
   highlightType?: string | null | undefined,
 ): CodeHighlightNode {
-  return new CodeHighlightNode(text, highlightType);
+  return $applyNodeReplacement(new CodeHighlightNode(text, highlightType));
 }
 
 export function $isCodeHighlightNode(
@@ -212,40 +224,26 @@ export function $isCodeHighlightNode(
   return node instanceof CodeHighlightNode;
 }
 
-export function getFirstCodeHighlightNodeOfLine(
-  anchor: LexicalNode,
-): CodeHighlightNode | null | undefined {
-  let currentNode = null;
-  const previousSiblings = anchor.getPreviousSiblings();
-  previousSiblings.push(anchor);
-  while (previousSiblings.length > 0) {
-    const node = previousSiblings.pop();
-    if ($isCodeHighlightNode(node)) {
-      currentNode = node;
-    }
-    if ($isLineBreakNode(node)) {
-      break;
-    }
+export function getFirstCodeNodeOfLine(
+  anchor: CodeHighlightNode | TabNode | LineBreakNode,
+): null | CodeHighlightNode | TabNode | LineBreakNode {
+  let previousNode = anchor;
+  let node: null | LexicalNode = anchor;
+  while ($isCodeHighlightNode(node) || $isTabNode(node)) {
+    previousNode = node;
+    node = node.getPreviousSibling();
   }
-
-  return currentNode;
+  return previousNode;
 }
 
-export function getLastCodeHighlightNodeOfLine(
-  anchor: LexicalNode,
-): CodeHighlightNode | null | undefined {
-  let currentNode = null;
-  const nextSiblings = anchor.getNextSiblings();
-  nextSiblings.unshift(anchor);
-  while (nextSiblings.length > 0) {
-    const node = nextSiblings.shift();
-    if ($isCodeHighlightNode(node)) {
-      currentNode = node;
-    }
-    if ($isLineBreakNode(node)) {
-      break;
-    }
+export function getLastCodeNodeOfLine(
+  anchor: CodeHighlightNode | TabNode | LineBreakNode,
+): CodeHighlightNode | TabNode | LineBreakNode {
+  let nextNode = anchor;
+  let node: null | LexicalNode = anchor;
+  while ($isCodeHighlightNode(node) || $isTabNode(node)) {
+    nextNode = node;
+    node = node.getNextSibling();
   }
-
-  return currentNode;
+  return nextNode;
 }

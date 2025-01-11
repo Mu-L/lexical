@@ -1,4 +1,3 @@
-/** @module @lexical/offset */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -9,6 +8,7 @@
 
 import type {
   EditorState,
+  ElementNode,
   LexicalEditor,
   NodeKey,
   NodeMap,
@@ -437,7 +437,7 @@ function $createOffsetNode(
   const start = state.offset;
 
   if ($isElementNode(node)) {
-    const childKeys = node.__children;
+    const childKeys = $createChildrenArray(node, nodeMap);
     const blockIsEmpty = childKeys.length === 0;
     const child = blockIsEmpty
       ? null
@@ -537,6 +537,26 @@ function $createOffsetChild(
   return firstNode;
 }
 
+export function $createChildrenArray(
+  element: ElementNode,
+  nodeMap: null | NodeMap,
+): Array<NodeKey> {
+  const children = [];
+  let nodeKey = element.__first;
+  while (nodeKey !== null) {
+    const node =
+      nodeMap === null ? $getNodeByKey(nodeKey) : nodeMap.get(nodeKey);
+    if (node === null || node === undefined) {
+      invariant(false, '$createChildrenArray: node does not exist in nodeMap');
+    }
+    children.push(nodeKey);
+    nodeKey = node.__next;
+  }
+  return children;
+}
+/** @deprecated renamed to {@link $createChildrenArray} by @lexical/eslint-plugin rules-of-lexical */
+export const createChildrenArray = $createChildrenArray;
+
 export function $createOffsetView(
   editor: LexicalEditor,
   blockOffsetSize = 1,
@@ -556,7 +576,7 @@ export function $createOffsetView(
 
   const node = $createOffsetChild(
     state,
-    root.__children,
+    $createChildrenArray(root, nodeMap),
     null,
     nodeMap,
     offsetMap,

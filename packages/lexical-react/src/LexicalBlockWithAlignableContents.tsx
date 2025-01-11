@@ -32,7 +32,7 @@ import {ReactNode, useCallback, useEffect, useRef} from 'react';
 
 type Props = Readonly<{
   children: ReactNode;
-  format: ElementFormatType | null | undefined;
+  format?: ElementFormatType | null;
   nodeKey: NodeKey;
   className: Readonly<{
     base: string;
@@ -52,24 +52,20 @@ export function BlockWithAlignableContents({
     useLexicalNodeSelection(nodeKey);
   const ref = useRef(null);
 
-  const onDelete = useCallback(
+  const $onDelete = useCallback(
     (event: KeyboardEvent) => {
-      if (isSelected && $isNodeSelection($getSelection())) {
+      const deleteSelection = $getSelection();
+      if (isSelected && $isNodeSelection(deleteSelection)) {
         event.preventDefault();
-        editor.update(() => {
-          const node = $getNodeByKey(nodeKey);
-
+        deleteSelection.getNodes().forEach((node) => {
           if ($isDecoratorNode(node)) {
             node.remove();
           }
-
-          setSelected(false);
         });
       }
-
       return false;
     },
-    [editor, isSelected, nodeKey, setSelected],
+    [isSelected],
   );
 
   useEffect(() => {
@@ -109,9 +105,8 @@ export function BlockWithAlignableContents({
       editor.registerCommand<MouseEvent>(
         CLICK_COMMAND,
         (event) => {
-          event.preventDefault();
-
           if (event.target === ref.current) {
+            event.preventDefault();
             if (!event.shiftKey) {
               clearSelection();
             }
@@ -126,16 +121,16 @@ export function BlockWithAlignableContents({
       ),
       editor.registerCommand(
         KEY_DELETE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
       editor.registerCommand(
         KEY_BACKSPACE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
     );
-  }, [clearSelection, editor, isSelected, nodeKey, onDelete, setSelected]);
+  }, [clearSelection, editor, isSelected, nodeKey, $onDelete, setSelected]);
 
   return (
     <div

@@ -12,6 +12,8 @@ import type {
   LexicalEditor,
   LexicalNode,
   EditorState,
+  LexicalNodeReplacement,
+  HTMLConfig,
 } from 'lexical';
 
 export type InitialEditorStateType =
@@ -20,17 +22,19 @@ export type InitialEditorStateType =
   | EditorState
   | ((editor: LexicalEditor) => void);
 
+export type InitialConfigType = $ReadOnly<{
+  editable?: boolean,
+  namespace: string,
+  nodes?: $ReadOnlyArray<Class<LexicalNode> | LexicalNodeReplacement>,
+  theme?: EditorThemeClasses,
+  editorState?: InitialEditorStateType,
+  onError: (error: Error, editor: LexicalEditor) => void,
+  html?: HTMLConfig,
+}>;
+
 type Props = {
-  initialConfig: $ReadOnly<{
-    editor__DEPRECATED?: LexicalEditor | null,
-    editable?: boolean,
-    namespace: string,
-    nodes?: $ReadOnlyArray<Class<LexicalNode>>,
-    theme?: EditorThemeClasses,
-    editorState?: InitialEditorStateType,
-    onError: (error: Error, editor: LexicalEditor) => void,
-  }>,
-  children: React$Node,
+  initialConfig: InitialConfigType,
+  children: React.Node,
 };
 
-declare export function LexicalComposer(Props): React$MixedElement;
+declare export function LexicalComposer(Props): React.MixedElement;

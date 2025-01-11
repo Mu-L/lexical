@@ -1,6 +1,4 @@
----
-sidebar_position: 4
----
+
 
 # Node Transforms
 
@@ -30,19 +28,30 @@ Transforms are executed sequentially before changes are propagated to the DOM an
 
 ![Transforms lifecycle](/img/docs/transforms-lifecycle.svg)
 
-**Beware!**
+:::caution Beware!
 
-In most cases, it is possible to achieve the same or very similar result through an [update listener](/docs/concepts/listeners#registerupdatelistener) followed by an update. This is highly discouraged as it triggers an additional render (the most expensive lifecycle operation).
+While it is possible to achieve the same or very similar result through an [update listener](/docs/concepts/listeners#registerupdatelistener) followed by an update, this is highly discouraged as it triggers an additional render (the most expensive lifecycle operation).
 
-Additionally, each cycle creates a brand new EditorState object which can interfere with plugins like HistoryPlugin (undo-redo) if not handled correctly.
+Additionally, each cycle creates a brand new `EditorState` object which can interfere with plugins like HistoryPlugin (undo-redo) if not handled correctly.
 
 ```js
-editor.addUpdateListener(() => {
+editor.registerUpdateListener(() => {
   editor.update(() => {
     // Don't do this
   });
 });
 ```
+
+:::
+
+### Transform heuristic
+
+1. We transform leaves first. If transforms generate additional dirty nodes we repeat `step 1`. The reasoning behind this is that marking a leaf as dirty marks all its parent elements as dirty too.
+2. We transform elements.
+    - If element transforms generate additional dirty nodes we repeat `step 1`.
+    - If element transforms only generate additional dirty elements we only repeat `step 2`.
+
+Node will be marked as dirty on any (or most) modifications done to it, it's children or siblings in certain cases.
 
 ## Preconditions
 
@@ -71,14 +80,14 @@ editor.registerNodeTransform(TextNode, textNode => {
   if (textNode.getTextContent() === 'modified') {
     textNode.setTextContent('re-modified');
   }
-}
+})
 // Plugin 2
 editor.registerNodeTransform(TextNode, textNode => {
   // This transform runs only once
   if (textNode.getTextContent() === 'original') {
     textNode.setTextContent('modified');
   }
-}
+})
 // App
 editor.addListener('update', ({editorState}) => {
   const text = editorState.read($textContent);
@@ -133,7 +142,6 @@ registerLexicalTextEntity<N: TextNode>(
 
 ## Examples
 
-1. [Emoticons (guided example)](https://github.com/facebook/lexical/blob/main/examples/emoticons.md)
-2. [Emojis](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/EmojisPlugin/index.ts)
-3. [AutoLink](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/AutoLinkPlugin/index.tsx)
-4. [HashtagPlugin](https://github.com/facebook/lexical/blob/main/packages/lexical-react/src/LexicalHashtagPlugin.ts)
+1. [Emojis](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/EmojisPlugin/index.ts)
+2. [AutoLink](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/AutoLinkPlugin/index.tsx)
+3. [HashtagPlugin](https://github.com/facebook/lexical/blob/main/packages/lexical-react/src/LexicalHashtagPlugin.ts)

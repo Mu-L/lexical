@@ -11,7 +11,13 @@ import {
   $isHeadingNode,
   HeadingNode,
 } from '@lexical/rich-text';
-import {$createTextNode, $getRoot, ParagraphNode} from 'lexical';
+import {
+  $createTextNode,
+  $getRoot,
+  $getSelection,
+  ParagraphNode,
+  RangeSelection,
+} from 'lexical';
 import {initializeUnitTest} from 'lexical/src/__tests__/utils';
 
 const editorConfig = Object.freeze({
@@ -38,8 +44,7 @@ describe('LexicalHeadingNode tests', () => {
         expect(headingNode.getTag()).toBe('h1');
         expect(headingNode.getTextContent()).toBe('');
       });
-      // @ts-ignore
-      expect(() => new HeadingNode()).toThrow();
+      expect(() => new HeadingNode('h1')).toThrow();
     });
 
     test('HeadingNode.createDOM()', async () => {
@@ -69,19 +74,32 @@ describe('LexicalHeadingNode tests', () => {
     test('HeadingNode.updateDOM()', async () => {
       const {editor} = testEnv;
       await editor.update(() => {
-        const headingNode = new HeadingNode('h1');
+        const headingNode = $createHeadingNode('h1');
         const domElement = headingNode.createDOM(editorConfig);
         expect(domElement.outerHTML).toBe('<h1 class="my-h1-class"></h1>');
-        const newHeadingNode = new HeadingNode('h2');
-        const result = newHeadingNode.updateDOM(headingNode, domElement);
+        const newHeadingNode = $createHeadingNode('h1');
+        const result = newHeadingNode.updateDOM(
+          headingNode,
+          domElement,
+          editor._config,
+        );
         expect(result).toBe(false);
+        expect(domElement.outerHTML).toBe('<h1 class="my-h1-class"></h1>');
+        // When the HTML tag changes we must return true and not update the DOM, as createDOM will be called
+        const newTag = $createHeadingNode('h2');
+        const newTagResult = newTag.updateDOM(
+          headingNode,
+          domElement,
+          editor._config,
+        );
+        expect(newTagResult).toBe(true);
         expect(domElement.outerHTML).toBe('<h1 class="my-h1-class"></h1>');
       });
     });
 
-    test('HeadingNode.insertNewAfter()', async () => {
+    test('HeadingNode.insertNewAfter() empty', async () => {
       const {editor} = testEnv;
-      let headingNode;
+      let headingNode: HeadingNode;
       await editor.update(() => {
         const root = $getRoot();
         headingNode = new HeadingNode('h1');
@@ -91,7 +109,8 @@ describe('LexicalHeadingNode tests', () => {
         '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><h1><br></h1></div>',
       );
       await editor.update(() => {
-        const result = headingNode.insertNewAfter();
+        const selection = $getSelection() as RangeSelection;
+        const result = headingNode.insertNewAfter(selection);
         expect(result).toBeInstanceOf(ParagraphNode);
         expect(result.getDirection()).toEqual(headingNode.getDirection());
       });
@@ -100,12 +119,54 @@ describe('LexicalHeadingNode tests', () => {
       );
     });
 
-    test('HeadingNode.canInsertTab()', async () => {
+    test('HeadingNode.insertNewAfter() middle', async () => {
       const {editor} = testEnv;
+      let headingNode: HeadingNode;
       await editor.update(() => {
-        const headingNode = new HeadingNode('h1');
-        expect(headingNode.canInsertTab()).toBe(false);
+        const root = $getRoot();
+        headingNode = new HeadingNode('h1');
+        const headingTextNode = $createTextNode('hello world');
+        root.append(headingNode.append(headingTextNode));
+        headingTextNode.select(5, 5);
       });
+      expect(testEnv.outerHTML).toBe(
+        '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><h1 dir="ltr"><span data-lexical-text="true">hello world</span></h1></div>',
+      );
+      await editor.update(() => {
+        const selection = $getSelection() as RangeSelection;
+        const result = headingNode.insertNewAfter(selection);
+        expect(result).toBeInstanceOf(HeadingNode);
+        expect(result.getDirection()).toEqual(headingNode.getDirection());
+      });
+      expect(testEnv.outerHTML).toBe(
+        '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><h1 dir="ltr"><span data-lexical-text="true">hello world</span></h1><h1><br></h1></div>',
+      );
+    });
+
+    test('HeadingNode.insertNewAfter() end', async () => {
+      const {editor} = testEnv;
+      let headingNode: HeadingNode;
+      await editor.update(() => {
+        const root = $getRoot();
+        headingNode = new HeadingNode('h1');
+        const headingTextNode1 = $createTextNode('hello');
+        const headingTextNode2 = $createTextNode(' world');
+        headingTextNode2.setFormat('bold');
+        root.append(headingNode.append(headingTextNode1, headingTextNode2));
+        headingTextNode2.selectEnd();
+      });
+      expect(testEnv.outerHTML).toBe(
+        '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><h1 dir="ltr"><span data-lexical-text="true">hello</span><strong data-lexical-text="true"> world</strong></h1></div>',
+      );
+      await editor.update(() => {
+        const selection = $getSelection() as RangeSelection;
+        const result = headingNode.insertNewAfter(selection);
+        expect(result).toBeInstanceOf(ParagraphNode);
+        expect(result.getDirection()).toEqual(headingNode.getDirection());
+      });
+      expect(testEnv.outerHTML).toBe(
+        '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><h1 dir="ltr"><span data-lexical-text="true">hello</span><strong data-lexical-text="true"> world</strong></h1><p><br></p></div>',
+      );
     });
 
     test('$createHeadingNode()', async () => {
@@ -129,7 +190,7 @@ describe('LexicalHeadingNode tests', () => {
 
     test('creates a h2 with text and can insert a new paragraph after', async () => {
       const {editor} = testEnv;
-      let headingNode;
+      let headingNode: HeadingNode;
       const text = 'hello world';
       await editor.update(() => {
         const root = $getRoot();

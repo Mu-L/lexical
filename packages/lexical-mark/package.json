@@ -8,17 +8,35 @@
     "mark"
   ],
   "license": "MIT",
-  "version": "0.6.1-next.0",
+  "version": "0.23.1",
   "main": "LexicalMark.js",
-  "peerDependencies": {
-    "lexical": "0.6.1-next.0"
-  },
+  "types": "index.d.ts",
   "dependencies": {
-    "@lexical/utils": "0.6.1-next.0"
+    "@lexical/utils": "0.23.1",
+    "lexical": "0.23.1"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/facebook/lexical",
     "directory": "packages/lexical-mark"
+  },
+  "module": "LexicalMark.mjs",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./index.d.ts",
+        "development": "./LexicalMark.dev.mjs",
+        "production": "./LexicalMark.prod.mjs",
+        "node": "./LexicalMark.node.mjs",
+        "default": "./LexicalMark.mjs"
+      },
+      "require": {
+        "types": "./index.d.ts",
+        "development": "./LexicalMark.dev.js",
+        "production": "./LexicalMark.prod.js",
+        "default": "./LexicalMark.js"
+      }
+    }
   }
 }

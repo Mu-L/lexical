@@ -1,10 +1,8 @@
-/** @module @lexical/dragon */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
- *
  *
  */
 
@@ -16,7 +14,11 @@ import {
 } from 'lexical';
 
 export function registerDragonSupport(editor: LexicalEditor): () => void {
+  const origin = window.location.origin;
   const handler = (event: MessageEvent) => {
+    if (event.origin !== origin) {
+      return;
+    }
     const rootElement = editor.getRootElement();
 
     if (document.activeElement !== rootElement) {

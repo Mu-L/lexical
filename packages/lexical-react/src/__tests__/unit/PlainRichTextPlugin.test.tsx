@@ -11,8 +11,8 @@ import {HashtagNode} from '@lexical/hashtag';
 import {AutoLinkNode, LinkNode} from '@lexical/link';
 import {ListItemNode, ListNode} from '@lexical/list';
 import {OverflowNode} from '@lexical/overflow';
-import {useLexicalComposerContext} from '@lexical/react/src/LexicalComposerContext';
-import LexicalErrorBoundary from '@lexical/react/src/LexicalErrorBoundary';
+import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
+import {LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
 import {HeadingNode, QuoteNode} from '@lexical/rich-text';
 import {TableCellNode, TableNode, TableRowNode} from '@lexical/table';
 import {$rootTextContent} from '@lexical/text';
@@ -21,20 +21,37 @@ import {
   $createTextNode,
   $getRoot,
   $getSelection,
-  $isNodeSelection,
+  $isRangeSelection,
+  LexicalEditor,
 } from 'lexical';
 import * as React from 'react';
-import {createRoot} from 'react-dom/client';
-import * as ReactTestUtils from 'react-dom/test-utils';
+import {createRoot, Root} from 'react-dom/client';
+import * as ReactTestUtils from 'shared/react-test-utils';
 
 import {LexicalComposer} from '../../LexicalComposer';
 import {ContentEditable} from '../../LexicalContentEditable';
 import {PlainTextPlugin} from '../../LexicalPlainTextPlugin';
 import {RichTextPlugin} from '../../LexicalRichTextPlugin';
 
+const RICH_TEXT_NODES = [
+  HeadingNode,
+  ListNode,
+  ListItemNode,
+  QuoteNode,
+  CodeNode,
+  TableNode,
+  TableCellNode,
+  TableRowNode,
+  HashtagNode,
+  CodeHighlightNode,
+  AutoLinkNode,
+  LinkNode,
+  OverflowNode,
+];
+
 describe('LexicalNodeHelpers tests', () => {
-  let container = null;
-  let reactRoot;
+  let container: HTMLDivElement | null = null;
+  let reactRoot: Root;
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -43,7 +60,7 @@ describe('LexicalNodeHelpers tests', () => {
   });
 
   afterEach(() => {
-    document.body.removeChild(container);
+    document.body.removeChild(container!);
     container = null;
 
     jest.restoreAllMocks();
@@ -70,24 +87,7 @@ describe('LexicalNodeHelpers tests', () => {
             initialConfig={{
               editorState: $initialEditorState,
               namespace: '',
-              nodes:
-                plugin === 'PlainTextPlugin'
-                  ? []
-                  : [
-                      HeadingNode,
-                      ListNode,
-                      ListItemNode,
-                      QuoteNode,
-                      CodeNode,
-                      TableNode,
-                      TableCellNode,
-                      TableRowNode,
-                      HashtagNode,
-                      CodeHighlightNode,
-                      AutoLinkNode,
-                      LinkNode,
-                      OverflowNode,
-                    ],
+              nodes: plugin === 'PlainTextPlugin' ? [] : RICH_TEXT_NODES,
               onError: () => {
                 throw Error();
               },
@@ -97,13 +97,13 @@ describe('LexicalNodeHelpers tests', () => {
             {plugin === 'PlainTextPlugin' ? (
               <PlainTextPlugin
                 contentEditable={<ContentEditable />}
-                placeholder=""
+                placeholder={null}
                 ErrorBoundary={LexicalErrorBoundary}
               />
             ) : (
               <RichTextPlugin
                 contentEditable={<ContentEditable />}
-                placeholder=""
+                placeholder={null}
                 ErrorBoundary={LexicalErrorBoundary}
               />
             )}
@@ -115,7 +115,7 @@ describe('LexicalNodeHelpers tests', () => {
         reactRoot.render(<App />);
       });
 
-      const text = editor.getEditorState().read($rootTextContent);
+      const text = editor!.getEditorState().read($rootTextContent);
       expect(text).toBe('foo');
     });
   }
@@ -138,24 +138,7 @@ describe('LexicalNodeHelpers tests', () => {
             initialConfig={{
               editorState: initialEditorStateJson,
               namespace: '',
-              nodes:
-                plugin === 'PlainTextPlugin'
-                  ? []
-                  : [
-                      HeadingNode,
-                      ListNode,
-                      ListItemNode,
-                      QuoteNode,
-                      CodeNode,
-                      TableNode,
-                      TableCellNode,
-                      TableRowNode,
-                      HashtagNode,
-                      CodeHighlightNode,
-                      AutoLinkNode,
-                      LinkNode,
-                      OverflowNode,
-                    ],
+              nodes: plugin === 'PlainTextPlugin' ? [] : RICH_TEXT_NODES,
               onError: () => {
                 throw Error();
               },
@@ -165,13 +148,13 @@ describe('LexicalNodeHelpers tests', () => {
             {plugin === 'PlainTextPlugin' ? (
               <PlainTextPlugin
                 contentEditable={<ContentEditable />}
-                placeholder=""
+                placeholder={null}
                 ErrorBoundary={LexicalErrorBoundary}
               />
             ) : (
               <RichTextPlugin
                 contentEditable={<ContentEditable />}
-                placeholder=""
+                placeholder={null}
                 ErrorBoundary={LexicalErrorBoundary}
               />
             )}
@@ -183,20 +166,84 @@ describe('LexicalNodeHelpers tests', () => {
         reactRoot.render(<App />);
       });
 
-      await editor.focus();
+      await editor!.focus();
 
-      await editor.getEditorState().read(() => {
+      await editor!.getEditorState().read(() => {
         expect($rootTextContent()).toBe('foo');
 
         const selection = $getSelection();
 
-        if ($isNodeSelection(selection)) {
+        if (!$isRangeSelection(selection)) {
           return;
         }
 
         expect(selection.anchor.getNode().getTextContent()).toBe('foo');
         expect(selection.focus.getNode().getTextContent()).toBe('foo');
       });
+    });
+  }
+
+  for (const plugin of ['PlainTextPlugin', 'RichTextPlugin']) {
+    it(`${plugin} can hide placeholder when non-editable`, async () => {
+      let editor: LexicalEditor;
+
+      function GrabEditor() {
+        [editor] = useLexicalComposerContext();
+        return null;
+      }
+
+      function App() {
+        return (
+          <LexicalComposer
+            initialConfig={{
+              namespace: '',
+              nodes: plugin === 'PlainTextPlugin' ? [] : RICH_TEXT_NODES,
+              onError: () => {
+                throw Error();
+              },
+              theme: {},
+            }}>
+            <GrabEditor />
+            {plugin === 'PlainTextPlugin' ? (
+              <PlainTextPlugin
+                contentEditable={<ContentEditable />}
+                placeholder={(isEditable) =>
+                  isEditable ? (
+                    <span className="placeholder">My placeholder</span>
+                  ) : null
+                }
+                ErrorBoundary={LexicalErrorBoundary}
+              />
+            ) : (
+              <RichTextPlugin
+                contentEditable={<ContentEditable />}
+                placeholder={(isEditable) =>
+                  isEditable ? (
+                    <span className="placeholder">My placeholder</span>
+                  ) : null
+                }
+                ErrorBoundary={LexicalErrorBoundary}
+              />
+            )}
+          </LexicalComposer>
+        );
+      }
+
+      await ReactTestUtils.act(async () => {
+        reactRoot.render(<App />);
+      });
+
+      function placeholderText() {
+        const placeholderContainer = container!.querySelector('.placeholder');
+        return placeholderContainer && placeholderContainer.textContent;
+      }
+
+      expect(placeholderText()).toBe('My placeholder');
+      await ReactTestUtils.act(async () => {
+        editor.setEditable(false);
+        reactRoot.render(<App />);
+      });
+      expect(placeholderText()).toBe(null);
     });
   }
 });

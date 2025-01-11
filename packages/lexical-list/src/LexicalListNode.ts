@@ -8,33 +8,41 @@
 
 import {
   addClassNamesToElement,
+  isHTMLElement,
   removeClassNamesFromElement,
 } from '@lexical/utils';
 import {
+  $applyNodeReplacement,
   $createTextNode,
   $isElementNode,
   DOMConversionMap,
   DOMConversionOutput,
+  DOMExportOutput,
   EditorConfig,
   EditorThemeClasses,
   ElementNode,
   LexicalEditor,
   LexicalNode,
+  LexicalUpdateJSON,
   NodeKey,
   SerializedElementNode,
   Spread,
 } from 'lexical';
+import invariant from 'shared/invariant';
+import normalizeClassNames from 'shared/normalizeClassNames';
 
 import {$createListItemNode, $isListItemNode, ListItemNode} from '.';
-import {$getListDepth, wrapInListItem} from './utils';
+import {
+  mergeNextSiblingListIfSameType,
+  updateChildrenListItemValue,
+} from './formatList';
+import {$getListDepth, $wrapInListItem} from './utils';
 
 export type SerializedListNode = Spread<
   {
     listType: ListType;
     start: number;
     tag: ListNodeTagType;
-    type: 'list';
-    version: 1;
   },
   SerializedElementNode
 >;
@@ -62,7 +70,7 @@ export class ListNode extends ElementNode {
     return new ListNode(listType, node.__start, node.__key);
   }
 
-  constructor(listType: ListType, start: number, key?: NodeKey) {
+  constructor(listType: ListType = 'number', start: number = 1, key?: NodeKey) {
     super(key);
     const _listType = TAG_TO_LIST_TYPE[listType] || listType;
     this.__listType = _listType;
@@ -74,12 +82,25 @@ export class ListNode extends ElementNode {
     return this.__tag;
   }
 
+  setListType(type: ListType): this {
+    const writable = this.getWritable();
+    writable.__listType = type;
+    writable.__tag = type === 'number' ? 'ol' : 'ul';
+    return writable;
+  }
+
   getListType(): ListType {
     return this.__listType;
   }
 
   getStart(): number {
     return this.__start;
+  }
+
+  setStart(start: number): this {
+    const self = this.getWritable();
+    self.__start = start;
+    return self;
   }
 
   // View
@@ -93,44 +114,66 @@ export class ListNode extends ElementNode {
     }
     // @ts-expect-error Internal field.
     dom.__lexicalListType = this.__listType;
-    setListThemeClassNames(dom, config.theme, this);
+    $setListThemeClassNames(dom, config.theme, this);
 
     return dom;
   }
 
-  updateDOM(
-    prevNode: ListNode,
-    dom: HTMLElement,
-    config: EditorConfig,
-  ): boolean {
+  updateDOM(prevNode: this, dom: HTMLElement, config: EditorConfig): boolean {
     if (prevNode.__tag !== this.__tag) {
       return true;
     }
 
-    setListThemeClassNames(dom, config.theme, this);
+    $setListThemeClassNames(dom, config.theme, this);
 
     return false;
   }
 
+  static transform(): (node: LexicalNode) => void {
+    return (node: LexicalNode) => {
+      invariant($isListNode(node), 'node is not a ListNode');
+      mergeNextSiblingListIfSameType(node);
+      updateChildrenListItemValue(node);
+    };
+  }
+
   static importDOM(): DOMConversionMap | null {
     return {
-      ol: (node: Node) => ({
-        conversion: convertListNode,
+      ol: () => ({
+        conversion: $convertListNode,
         priority: 0,
       }),
-      ul: (node: Node) => ({
-        conversion: convertListNode,
+      ul: () => ({
+        conversion: $convertListNode,
         priority: 0,
       }),
     };
   }
 
   static importJSON(serializedNode: SerializedListNode): ListNode {
-    const node = $createListNode(serializedNode.listType, serializedNode.start);
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
+    return $createListNode().updateFromJSON(serializedNode);
+  }
+
+  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedListNode>): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setListType(serializedNode.listType)
+      .setStart(serializedNode.start);
+  }
+
+  exportDOM(editor: LexicalEditor): DOMExportOutput {
+    const element = this.createDOM(editor._config, editor);
+    if (isHTMLElement(element)) {
+      if (this.__start !== 1) {
+        element.setAttribute('start', String(this.__start));
+      }
+      if (this.__listType === 'check') {
+        element.setAttribute('__lexicalListType', 'check');
+      }
+    }
+    return {
+      element,
+    };
   }
 
   exportJSON(): SerializedListNode {
@@ -139,8 +182,6 @@ export class ListNode extends ElementNode {
       listType: this.getListType(),
       start: this.getStart(),
       tag: this.getTag(),
-      type: 'list',
-      version: 1,
     };
   }
 
@@ -164,15 +205,18 @@ export class ListNode extends ElementNode {
         if ($isListNode(currentNode)) {
           listItemNode.append(currentNode);
         } else if ($isElementNode(currentNode)) {
-          const textNode = $createTextNode(currentNode.getTextContent());
-          listItemNode.append(textNode);
+          if (currentNode.isInline()) {
+            listItemNode.append(currentNode);
+          } else {
+            const textNode = $createTextNode(currentNode.getTextContent());
+            listItemNode.append(textNode);
+          }
         } else {
           listItemNode.append(currentNode);
         }
         super.append(listItemNode);
       }
     }
-
     return this;
   }
 
@@ -181,7 +225,7 @@ export class ListNode extends ElementNode {
   }
 }
 
-function setListThemeClassNames(
+function $setListThemeClassNames(
   dom: HTMLElement,
   editorThemeClasses: EditorThemeClasses,
   node: ListNode,
@@ -198,6 +242,7 @@ function setListThemeClassNames(
     const listClassName = listTheme[node.__tag];
     let nestedListClassName;
     const nestedListTheme = listTheme.nested;
+    const checklistClassName = listTheme.checklist;
 
     if (nestedListTheme !== undefined && nestedListTheme.list) {
       nestedListClassName = nestedListTheme.list;
@@ -207,9 +252,12 @@ function setListThemeClassNames(
       classesToAdd.push(listClassName);
     }
 
+    if (checklistClassName !== undefined && node.__listType === 'check') {
+      classesToAdd.push(checklistClassName);
+    }
+
     if (listLevelClassName !== undefined) {
-      const listItemClasses = listLevelClassName.split(' ');
-      classesToAdd.push(...listItemClasses);
+      classesToAdd.push(...normalizeClassNames(listLevelClassName));
       for (let i = 0; i < listLevelsClassNames.length; i++) {
         if (i !== normalizedListDepth) {
           classesToRemove.push(node.__tag + i);
@@ -218,7 +266,7 @@ function setListThemeClassNames(
     }
 
     if (nestedListClassName !== undefined) {
-      const nestedListItemClasses = nestedListClassName.split(' ');
+      const nestedListItemClasses = normalizeClassNames(nestedListClassName);
 
       if (listDepth > 1) {
         classesToAdd.push(...nestedListItemClasses);
@@ -242,36 +290,61 @@ function setListThemeClassNames(
  * ensuring that they are all ListItemNodes and contain either a single nested ListNode
  * or some other inline content.
  */
-function normalizeChildren(nodes: Array<LexicalNode>): Array<ListItemNode> {
+function $normalizeChildren(nodes: Array<LexicalNode>): Array<ListItemNode> {
   const normalizedListItems: Array<ListItemNode> = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     if ($isListItemNode(node)) {
       normalizedListItems.push(node);
-      node.getChildren().forEach((child) => {
-        if ($isListNode(child)) {
-          normalizedListItems.push(wrapInListItem(child));
-        }
-      });
+      const children = node.getChildren();
+      if (children.length > 1) {
+        children.forEach((child) => {
+          if ($isListNode(child)) {
+            normalizedListItems.push($wrapInListItem(child));
+          }
+        });
+      }
     } else {
-      normalizedListItems.push(wrapInListItem(node));
+      normalizedListItems.push($wrapInListItem(node));
     }
   }
   return normalizedListItems;
 }
 
-function convertListNode(domNode: Node): DOMConversionOutput {
+function isDomChecklist(domNode: HTMLElement) {
+  if (
+    domNode.getAttribute('__lexicallisttype') === 'check' ||
+    // is github checklist
+    domNode.classList.contains('contains-task-list')
+  ) {
+    return true;
+  }
+  // if children are checklist items, the node is a checklist ul. Applicable for googledoc checklist pasting.
+  for (const child of domNode.childNodes) {
+    if (isHTMLElement(child) && child.hasAttribute('aria-checked')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function $convertListNode(domNode: HTMLElement): DOMConversionOutput {
   const nodeName = domNode.nodeName.toLowerCase();
   let node = null;
-
   if (nodeName === 'ol') {
-    node = $createListNode('number');
+    // @ts-ignore
+    const start = domNode.start;
+    node = $createListNode('number', start);
   } else if (nodeName === 'ul') {
-    node = $createListNode('bullet');
+    if (isDomChecklist(domNode)) {
+      node = $createListNode('check');
+    } else {
+      node = $createListNode('bullet');
+    }
   }
 
   return {
-    after: normalizeChildren,
+    after: $normalizeChildren,
     node,
   };
 }
@@ -281,10 +354,24 @@ const TAG_TO_LIST_TYPE: Record<string, ListType> = {
   ul: 'bullet',
 };
 
-export function $createListNode(listType: ListType, start = 1): ListNode {
-  return new ListNode(listType, start);
+/**
+ * Creates a ListNode of listType.
+ * @param listType - The type of list to be created. Can be 'number', 'bullet', or 'check'.
+ * @param start - Where an ordered list starts its count, start = 1 if left undefined.
+ * @returns The new ListNode
+ */
+export function $createListNode(
+  listType: ListType = 'number',
+  start = 1,
+): ListNode {
+  return $applyNodeReplacement(new ListNode(listType, start));
 }
 
+/**
+ * Checks to see if the node is a ListNode.
+ * @param node - The node to be checked.
+ * @returns true if the node is a ListNode, false otherwise.
+ */
 export function $isListNode(
   node: LexicalNode | null | undefined,
 ): node is ListNode {

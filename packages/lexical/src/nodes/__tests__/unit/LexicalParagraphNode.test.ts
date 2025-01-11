@@ -11,6 +11,7 @@ import {
   $getRoot,
   $isParagraphNode,
   ParagraphNode,
+  RangeSelection,
 } from 'lexical';
 
 import {initializeUnitTest} from '../../../__tests__/utils';
@@ -51,6 +52,8 @@ describe('LexicalParagraphNode tests', () => {
           direction: null,
           format: '',
           indent: 0,
+          textFormat: 0,
+          textStyle: '',
           type: 'paragraph',
           version: 1,
         });
@@ -85,7 +88,11 @@ describe('LexicalParagraphNode tests', () => {
         expect(domElement.outerHTML).toBe('<p class="my-paragraph-class"></p>');
 
         const newParagraphNode = new ParagraphNode();
-        const result = newParagraphNode.updateDOM(paragraphNode, domElement);
+        const result = newParagraphNode.updateDOM(
+          paragraphNode,
+          domElement,
+          editorConfig,
+        );
 
         expect(result).toBe(false);
         expect(domElement.outerHTML).toBe('<p class="my-paragraph-class"></p>');
@@ -94,7 +101,7 @@ describe('LexicalParagraphNode tests', () => {
 
     test('ParagraphNode.insertNewAfter()', async () => {
       const {editor} = testEnv;
-      let paragraphNode;
+      let paragraphNode: ParagraphNode;
 
       await editor.update(() => {
         const root = $getRoot();
@@ -107,23 +114,16 @@ describe('LexicalParagraphNode tests', () => {
       );
 
       await editor.update(() => {
-        const result = paragraphNode.insertNewAfter();
-
+        const selection = paragraphNode.select();
+        const result = paragraphNode.insertNewAfter(
+          selection as RangeSelection,
+          false,
+        );
         expect(result).toBeInstanceOf(ParagraphNode);
         expect(result.getDirection()).toEqual(paragraphNode.getDirection());
-      });
-      expect(testEnv.outerHTML).toBe(
-        '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><p><br></p><p><br></p></div>',
-      );
-    });
-
-    test('ParagraphNode.canInsertTab()', async () => {
-      const {editor} = testEnv;
-
-      await editor.update(() => {
-        const paragraphNode = new ParagraphNode();
-
-        expect(paragraphNode.canInsertTab()).toBe(false);
+        expect(testEnv.outerHTML).toBe(
+          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><p><br></p></div>',
+        );
       });
     });
 
