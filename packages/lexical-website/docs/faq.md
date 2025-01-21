@@ -37,6 +37,55 @@ If you've used React Hooks before, you can think of `$` functions as being somet
 
 Internally, we've found this scales really well and developers get to grips with it in almost no time at all.
 
+## When does reconciliation happen?
+
+Reconciliation is scheduled with
+[queueMicrotask](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask),
+which means that it will happen very soon, but asynchronously. This is similar
+to something like `setTimeout(reconcile, 0)` with a bit more immediacy or
+`Promise.resolve().then(reconcile)` with less overhead. This is done so
+that all of the updates that occur as a result of a single logical event will
+be batched into one reconciliation.
+
+You can force a reconciliation to take place synchronously with the discrete
+option to `editor.update` (demonstrated below).
+
+## Why do tests use `await editor.update(…)`
+
+You may notice that many tests look like this:
+
+```js
+await editor.update(updateA);
+await editor.update(updateB);
+```
+
+An astute observer would notice that this seems very strange, since
+`editor.update()` returns `void` and not `Promise<void>`. However,
+it does happen to work as you would want it to because
+the implementation of Promise uses the same microtask queue.
+
+It's not recommended to rely on this in browser code as it could depend on
+implementation details of the compilers, bundlers, and VM. It's best to stick
+to using the `discrete` or the `onUpdate` callback options to be sure that
+the reconciliation has taken place.
+
+Ignoring any other microtasks that were scheduled elsewhere,
+it is roughly equivalent to this synchronous code:
+
+```js
+editor.update(updateA, {discrete: true});
+editor.update(updateB, {discrete: true});
+```
+
+At a high level, very roughly, the order of operations looks like this:
+
+1. `editor.update()` is called
+2. `updateA()` is called and updates the editor state
+3. `editor.update()` schedules a reconciliation microtask and returns
+4. `await` schedules a resume microtask and yields control to the task executor
+5. the reconciliation microtask runs, reconciling the editor state with the DOM
+6. the resume microtask runs
+
 ## How do I listen for user text insertions?
 
 Listening to text insertion events is problematic with content editables in general. It's a common source of bugs due to how
@@ -60,4 +109,42 @@ You can go this by calling ```clear()``` on the RootNode in an update callback:
 editor.update(() => {
   $getRoot().clear();
 })
+```
+
+## How do I listen to specific key down events?
+
+You can leverage Lexical's command listening system. Lexical provides specific commands for many common keyboard operations, such as:
+
+- `KEY_ARROW_LEFT_COMMAND`
+- `KEY_ARROW_RIGHT_COMMAND`
+- `KEY_ARROW_UP_COMMAND`
+- `KEY_ARROW_DOWN_COMMAND`
+- `KEY_SPACE_COMMAND`
+- `KEY_ENTER_COMMAND`
+- `KEY_BACKSPACE_COMMAND`
+- `KEY_DELETE_COMMAND`
+- `KEY_TAB_COMMAND`
+- `KEY_ESCAPE_COMMAND`
+
+```js
+import {KEY_ENTER_COMMAND, COMMAND_PRIORITY_LOW} from 'lexical';
+
+editor.registerCommand(KEY_ENTER_COMMAND, (event: KeyboardEvent) => {
+  // Handle enter key presses here
+  return false;
+}, COMMAND_PRIORITY_LOW)
+```
+
+You can use the generic `KEY_DOWN_COMMAND` command to listen
+to all keydown events. Do note, that returning `true` in your listener will prevent any
+other key based commands from firing, so in most cases you'll want to return `false` from
+the command listener.
+
+```js
+import {KEY_DOWN_COMMAND, COMMAND_PRIORITY_LOW} from 'lexical';
+
+editor.registerCommand(KEY_DOWN_COMMAND, (event: KeyboardEvent) => {
+  // Handle event here
+  return false;
+}, COMMAND_PRIORITY_LOW)
 ```

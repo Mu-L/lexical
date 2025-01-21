@@ -38,6 +38,7 @@ test.describe('Regression test #3136', () => {
     await page.keyboard.type('link');
     await selectCharacters(page, 'left', 'link'.length);
     await click(page, '.link');
+    await click(page, '.link-confirm');
 
     // Select non-link text so that selection ends just before the link
     await moveLeft(page, 5);
@@ -57,7 +58,8 @@ test.describe('Regression test #3136', () => {
           <a
             class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
             dir="ltr"
-            href="https://">
+            href="https://"
+            rel="noreferrer">
             <span data-lexical-text="true">link</span>
           </a>
         </p>
@@ -77,6 +79,7 @@ test.describe('Regression test #3136', () => {
     await page.keyboard.type('link');
     await selectCharacters(page, 'left', 'link'.length);
     await click(page, '.link');
+    await click(page, '.link-confirm');
 
     // Non-link text
     await moveRight(page, 1);
@@ -99,7 +102,8 @@ test.describe('Regression test #3136', () => {
           <a
             class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
             dir="ltr"
-            href="https://">
+            href="https://"
+            rel="noreferrer">
             <span data-lexical-text="true">link</span>
           </a>
           <span data-lexical-text="true">replaced</span>

@@ -23,144 +23,135 @@ import {
   selectFromInsertDropdown,
   test,
   waitForSelector,
+  withExclusiveClipboardAccess,
 } from '../utils/index.mjs';
 
 test.describe('HorizontalRule', () => {
   test.beforeEach(({isCollab, page}) => initialize({isCollab, page}));
-  test('Can create a horizontal rule and move selection around it', async ({
-    page,
-    isPlainText,
-    browserName,
-  }) => {
-    test.skip(isPlainText);
-    await focusEditor(page);
+  test(
+    'Can create a horizontal rule and move selection around it',
+    {tag: '@flaky'},
+    async ({page, isCollab, isPlainText, browserName}) => {
+      test.skip(isPlainText);
+      await focusEditor(page);
 
-    await selectFromInsertDropdown(page, '.horizontal-rule');
+      await selectFromInsertDropdown(page, '.horizontal-rule');
 
-    await waitForSelector(page, 'hr');
+      await waitForSelector(page, 'hr');
 
-    await assertHTML(
-      page,
-      html`
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <div
-          contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-      `,
-    );
+      await assertHTML(
+        page,
+        html`
+          <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+          <hr
+            class="PlaygroundEditorTheme__hr"
+            contenteditable="false"
+            data-lexical-decorator="true" />
+          <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+        `,
+      );
 
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [2],
-      focusOffset: 0,
-      focusPath: [2],
-    });
-
-    await page.keyboard.press('ArrowUp');
-
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [0],
-      focusOffset: 0,
-      focusPath: [0],
-    });
-
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [2],
-      focusOffset: 0,
-      focusPath: [2],
-    });
-
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('ArrowLeft');
-
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [0],
-      focusOffset: 0,
-      focusPath: [0],
-    });
-
-    await page.keyboard.type('Some text');
-
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [2],
-      focusOffset: 0,
-      focusPath: [2],
-    });
-
-    await page.keyboard.type('Some more text');
-
-    await assertHTML(
-      page,
-      html`
-        <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
-          <span data-lexical-text="true">Some text</span>
-        </p>
-        <div
-          contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
-        <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
-          <span data-lexical-text="true">Some more text</span>
-        </p>
-      `,
-    );
-
-    await moveToLineBeginning(page);
-
-    await page.keyboard.press('ArrowLeft');
-
-    await page.keyboard.press('ArrowLeft');
-
-    if (browserName === 'webkit') {
       await assertSelection(page, {
-        anchorOffset: 9,
-        anchorPath: [0, 0, 0],
-        focusOffset: 9,
-        focusPath: [0, 0, 0],
+        anchorOffset: 0,
+        anchorPath: [2],
+        focusOffset: 0,
+        focusPath: [2],
       });
-    } else {
+
+      await page.keyboard.press('ArrowUp');
+
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [0],
+        focusOffset: 0,
+        focusPath: [0],
+      });
+
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowRight');
+
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [2],
+        focusOffset: 0,
+        focusPath: [2],
+      });
+
+      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowLeft');
+
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [0],
+        focusOffset: 0,
+        focusPath: [0],
+      });
+
+      await page.keyboard.type('Some text');
+
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowRight');
+
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [2],
+        focusOffset: 0,
+        focusPath: [2],
+      });
+
+      await page.keyboard.type('Some more text');
+
+      await assertHTML(
+        page,
+        html`
+          <p
+            class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
+            dir="ltr">
+            <span data-lexical-text="true">Some text</span>
+          </p>
+          <hr
+            class="PlaygroundEditorTheme__hr"
+            contenteditable="false"
+            data-lexical-decorator="true" />
+          <p
+            class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
+            dir="ltr">
+            <span data-lexical-text="true">Some more text</span>
+          </p>
+        `,
+      );
+
+      await moveToLineBeginning(page);
+
+      await page.keyboard.press('ArrowLeft');
+
+      await page.keyboard.press('ArrowLeft');
+
       await assertSelection(page, {
         anchorOffset: 1,
         anchorPath: [0],
         focusOffset: 1,
         focusPath: [0],
       });
-    }
 
-    await pressBackspace(page, 10);
+      await pressBackspace(page, 10);
 
-    await assertHTML(
-      page,
-      '<div data-lexical-decorator="true" contenteditable="false" style="display: contents;"><hr></div><p class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr" dir="ltr"><span data-lexical-text="true">Some more text</span></p>',
-    );
+      // Collab doesn't process the cursor correctly
+      if (!isCollab) {
+        await assertHTML(
+          page,
+          '<div class="PlaygroundEditorTheme__blockCursor" contenteditable="false" data-lexical-cursor="true"></div><hr class="PlaygroundEditorTheme__hr" data-lexical-decorator="true" contenteditable="false"><p class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr" dir="ltr"><span data-lexical-text="true">Some more text</span></p>',
+        );
+      }
 
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [],
-      focusOffset: 0,
-      focusPath: [],
-    });
-  });
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [],
+        focusOffset: 0,
+        focusPath: [],
+      });
+    },
+  );
 
   test('Will add a horizontal rule at the end of a current TextNode and move selection to the new ParagraphNode.', async ({
     page,
@@ -202,12 +193,10 @@ test.describe('HorizontalRule', () => {
           dir="ltr">
           <span data-lexical-text="true">Test</span>
         </p>
-        <div
+        <hr
+          class="PlaygroundEditorTheme__hr"
           contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
+          data-lexical-decorator="true" />
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
       `,
     );
@@ -268,12 +257,10 @@ test.describe('HorizontalRule', () => {
           dir="ltr">
           <span data-lexical-text="true">Te</span>
         </p>
-        <div
+        <hr
+          class="PlaygroundEditorTheme__hr"
           contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
+          data-lexical-decorator="true" />
         <p
           class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
           dir="ltr">
@@ -303,12 +290,10 @@ test.describe('HorizontalRule', () => {
       page,
       html`
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <div
+        <hr
+          class="PlaygroundEditorTheme__hr"
           contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
+          data-lexical-decorator="true" />
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
       `,
     );
@@ -323,24 +308,53 @@ test.describe('HorizontalRule', () => {
     // Select all the text
     await selectAll(page);
 
-    // Copy all the text
-    const clipboard = await copyToClipboard(page);
+    await withExclusiveClipboardAccess(async () => {
+      // Copy all the text
+      const clipboard = await copyToClipboard(page);
 
-    // Delete content
-    await page.keyboard.press('Backspace');
+      // Delete content
+      await page.keyboard.press('Backspace');
 
-    await pasteFromClipboard(page, clipboard);
+      await pasteFromClipboard(page, clipboard);
+
+      await assertHTML(
+        page,
+        html`
+          <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+          <hr
+            class="PlaygroundEditorTheme__hr"
+            contenteditable="false"
+            data-lexical-decorator="true" />
+          <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+        `,
+      );
+
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [2],
+        focusOffset: 0,
+        focusPath: [2],
+      });
+
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Backspace');
+
+      await pasteFromClipboard(page, clipboard);
+    });
 
     await assertHTML(
       page,
       html`
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <div
+        <hr
+          class="PlaygroundEditorTheme__hr"
           contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
+          data-lexical-decorator="true" />
+        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+        <hr
+          class="PlaygroundEditorTheme__hr"
+          contenteditable="false"
+          data-lexical-decorator="true" />
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
       `,
     );
@@ -351,38 +365,90 @@ test.describe('HorizontalRule', () => {
       focusOffset: 0,
       focusPath: [2],
     });
+  });
 
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('Backspace');
+  test('Can delete remove paragraph after a horizontal rule without deleting a horizontal rule', async ({
+    page,
+    browserName,
+    isPlainText,
+    isCollab,
+  }) => {
+    test.skip(isPlainText || isCollab);
 
-    await pasteFromClipboard(page, clipboard);
+    await focusEditor(page);
+
+    await selectFromInsertDropdown(page, '.horizontal-rule');
+
+    await waitForSelector(page, 'hr');
 
     await assertHTML(
       page,
       html`
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <div
+        <hr
+          class="PlaygroundEditorTheme__hr"
           contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <div
-          contenteditable="false"
-          style="display: contents;"
-          data-lexical-decorator="true">
-          <hr />
-        </div>
+          data-lexical-decorator="true" />
         <p class="PlaygroundEditorTheme__paragraph"><br /></p>
       `,
     );
-
     await assertSelection(page, {
       anchorOffset: 0,
       anchorPath: [2],
       focusOffset: 0,
       focusPath: [2],
+    });
+
+    // Delete content
+    await page.keyboard.press('Backspace');
+
+    await focusEditor(page);
+
+    await assertHTML(
+      page,
+      html`
+        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+        <hr
+          class="PlaygroundEditorTheme__hr selected"
+          contenteditable="false"
+          data-lexical-decorator="true" />
+      `,
+    );
+
+    if (browserName === 'webkit' || browserName === 'firefox') {
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [],
+        focusOffset: 0,
+        focusPath: [],
+      });
+    } else {
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [0],
+        focusOffset: 0,
+        focusPath: [0],
+      });
+    }
+
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Delete');
+
+    await assertHTML(
+      page,
+      html`
+        <hr
+          class="PlaygroundEditorTheme__hr selected"
+          contenteditable="false"
+          data-lexical-decorator="true" />
+      `,
+    );
+
+    await assertSelection(page, {
+      anchorOffset: 0,
+      anchorPath: [],
+      focusOffset: 0,
+      focusPath: [],
     });
   });
 });

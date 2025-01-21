@@ -6,35 +6,37 @@
  *
  */
 
-import type {Spread} from 'lexical';
-
 import {
-  DOMConversionMap,
-  DOMConversionOutput,
-  DOMExportOutput,
-  EditorConfig,
-  LexicalNode,
-  NodeKey,
-  SerializedTextNode,
+  $applyNodeReplacement,
+  type DOMConversionMap,
+  type DOMConversionOutput,
+  type DOMExportOutput,
+  type EditorConfig,
+  type LexicalNode,
+  type NodeKey,
+  type SerializedTextNode,
+  type Spread,
   TextNode,
 } from 'lexical';
 
 export type SerializedMentionNode = Spread<
   {
     mentionName: string;
-    type: 'mention';
-    version: 1;
   },
   SerializedTextNode
 >;
 
-function convertMentionElement(
+function $convertMentionElement(
   domNode: HTMLElement,
 ): DOMConversionOutput | null {
   const textContent = domNode.textContent;
+  const mentionName = domNode.getAttribute('data-lexical-mention-name');
 
   if (textContent !== null) {
-    const node = $createMentionNode(textContent);
+    const node = $createMentionNode(
+      typeof mentionName === 'string' ? mentionName : textContent,
+      textContent,
+    );
     return {
       node,
     };
@@ -55,13 +57,9 @@ export class MentionNode extends TextNode {
     return new MentionNode(node.__mention, node.__text, node.__key);
   }
   static importJSON(serializedNode: SerializedMentionNode): MentionNode {
-    const node = $createMentionNode(serializedNode.mentionName);
-    node.setTextContent(serializedNode.text);
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
+    return $createMentionNode(serializedNode.mentionName).updateFromJSON(
+      serializedNode,
+    );
   }
 
   constructor(mentionName: string, text?: string, key?: NodeKey) {
@@ -73,8 +71,6 @@ export class MentionNode extends TextNode {
     return {
       ...super.exportJSON(),
       mentionName: this.__mention,
-      type: 'mention',
-      version: 1,
     };
   }
 
@@ -82,12 +78,16 @@ export class MentionNode extends TextNode {
     const dom = super.createDOM(config);
     dom.style.cssText = mentionStyle;
     dom.className = 'mention';
+    dom.spellcheck = false;
     return dom;
   }
 
   exportDOM(): DOMExportOutput {
     const element = document.createElement('span');
     element.setAttribute('data-lexical-mention', 'true');
+    if (this.__text !== this.__mention) {
+      element.setAttribute('data-lexical-mention-name', this.__mention);
+    }
     element.textContent = this.__text;
     return {element};
   }
@@ -99,7 +99,7 @@ export class MentionNode extends TextNode {
           return null;
         }
         return {
-          conversion: convertMentionElement,
+          conversion: $convertMentionElement,
           priority: 1,
         };
       },
@@ -109,12 +109,23 @@ export class MentionNode extends TextNode {
   isTextEntity(): true {
     return true;
   }
+
+  canInsertTextBefore(): boolean {
+    return false;
+  }
+
+  canInsertTextAfter(): boolean {
+    return false;
+  }
 }
 
-export function $createMentionNode(mentionName: string): MentionNode {
-  const mentionNode = new MentionNode(mentionName);
+export function $createMentionNode(
+  mentionName: string,
+  textContent?: string,
+): MentionNode {
+  const mentionNode = new MentionNode(mentionName, (textContent = mentionName));
   mentionNode.setMode('segmented').toggleDirectionless();
-  return mentionNode;
+  return $applyNodeReplacement(mentionNode);
 }
 
 export function $isMentionNode(

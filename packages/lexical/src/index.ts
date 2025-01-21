@@ -1,4 +1,3 @@
-/** @module lexical */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -9,21 +8,34 @@
 
 export type {PasteCommandType} from './LexicalCommands';
 export type {
+  CommandListener,
   CommandListenerPriority,
   CommandPayloadType,
+  CreateEditorArgs,
   EditableListener,
   EditorConfig,
+  EditorSetOptions,
   EditorThemeClasses,
-  IntentionallyMarkedAsDirtyElement,
+  EditorThemeClassName,
+  EditorUpdateOptions,
+  HTMLConfig,
   Klass,
+  KlassConstructor,
   LexicalCommand,
   LexicalEditor,
+  LexicalNodeReplacement,
   MutationListener,
   NodeMutation,
   SerializedEditor,
   Spread,
+  Transform,
+  UpdateListener,
 } from './LexicalEditor';
-export type {EditorState, SerializedEditorState} from './LexicalEditorState';
+export type {
+  EditorState,
+  EditorStateReadOptions,
+  SerializedEditorState,
+} from './LexicalEditorState';
 export type {
   DOMChildConversion,
   DOMConversion,
@@ -31,7 +43,9 @@ export type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
+  DOMExportOutputMap,
   LexicalNode,
+  LexicalUpdateJSON,
   NodeKey,
   NodeMap,
   SerializedLexicalNode,
@@ -39,18 +53,17 @@ export type {
 export type {
   BaseSelection,
   ElementPointType as ElementPoint,
-  GridSelection,
-  GridSelectionShape,
   NodeSelection,
   Point,
+  PointType,
   RangeSelection,
   TextPointType as TextPoint,
 } from './LexicalSelection';
 export type {
+  ElementDOMSlot,
   ElementFormatType,
   SerializedElementNode,
 } from './nodes/LexicalElementNode';
-export type {SerializedGridCellNode} from './nodes/LexicalGridCellNode';
 export type {SerializedRootNode} from './nodes/LexicalRootNode';
 export type {
   SerializedTextNode,
@@ -83,12 +96,14 @@ export {
   INDENT_CONTENT_COMMAND,
   INSERT_LINE_BREAK_COMMAND,
   INSERT_PARAGRAPH_COMMAND,
+  INSERT_TAB_COMMAND,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   KEY_ARROW_UP_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  KEY_DOWN_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   KEY_MODIFIER_COMMAND,
@@ -100,9 +115,23 @@ export {
   PASTE_COMMAND,
   REDO_COMMAND,
   REMOVE_TEXT_COMMAND,
+  SELECT_ALL_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  SELECTION_INSERT_CLIPBOARD_NODES_COMMAND,
   UNDO_COMMAND,
 } from './LexicalCommands';
+export {
+  IS_ALL_FORMATTING,
+  IS_BOLD,
+  IS_CODE,
+  IS_HIGHLIGHT,
+  IS_ITALIC,
+  IS_STRIKETHROUGH,
+  IS_SUBSCRIPT,
+  IS_SUPERSCRIPT,
+  IS_UNDERLINE,
+  TEXT_TYPE_TO_FORMAT,
+} from './LexicalConstants';
 export {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_EDITOR,
@@ -115,47 +144,69 @@ export type {EventHandler} from './LexicalEvents';
 export {$normalizeSelection as $normalizeSelection__EXPERIMENTAL} from './LexicalNormalization';
 export {
   $createNodeSelection,
+  $createPoint,
   $createRangeSelection,
+  $createRangeSelectionFromDom,
+  $getCharacterOffsets,
   $getPreviousSelection,
   $getSelection,
   $getTextContent,
   $insertNodes,
+  $isBlockElementNode,
   $isNodeSelection,
   $isRangeSelection,
-  DEPRECATED_$createGridSelection,
-  DEPRECATED_$isGridSelection,
 } from './LexicalSelection';
-export {$parseSerializedNode} from './LexicalUpdates';
+export {$parseSerializedNode, isCurrentlyReadOnlyMode} from './LexicalUpdates';
 export {
   $addUpdateTag,
-  $getDecoratorNode,
+  $applyNodeReplacement,
+  $cloneWithProperties,
+  $copyNode,
+  $getAdjacentNode,
+  $getEditor,
   $getNearestNodeFromDOMNode,
   $getNearestRootOrShadowRoot,
   $getNodeByKey,
+  $getNodeByKeyOrThrow,
   $getRoot,
   $hasAncestor,
+  $hasUpdateTag,
   $isInlineElementOrDecoratorNode,
   $isLeafNode,
   $isRootOrShadowRoot,
+  $isTokenOrSegmented,
   $nodesOfType,
+  $onUpdate,
+  $selectAll,
   $setCompositionKey,
   $setSelection,
+  $splitNode,
+  getDOMOwnerDocument,
+  getDOMSelection,
+  getDOMSelectionFromTarget,
+  getDOMTextNode,
+  getEditorPropertyFromDOMNode,
+  getNearestEditorFromDOMNode,
+  INTERNAL_$isBlock,
+  isBlockDomNode,
+  isDocumentFragment,
+  isDOMDocumentNode,
+  isDOMNode,
+  isDOMTextNode,
+  isDOMUnmanaged,
+  isHTMLAnchorElement,
+  isHTMLElement,
+  isInlineDomNode,
+  isLexicalEditor,
+  isSelectionCapturedInDecoratorInput,
+  isSelectionWithinEditor,
+  resetRandomKey,
+  setDOMUnmanaged,
+  setNodeIndentFromDOM,
 } from './LexicalUtils';
-export {VERSION} from './LexicalVersion';
+export {ArtificialNode__DO_NOT_USE} from './nodes/ArtificialNode';
 export {$isDecoratorNode, DecoratorNode} from './nodes/LexicalDecoratorNode';
 export {$isElementNode, ElementNode} from './nodes/LexicalElementNode';
-export {
-  DEPRECATED_$isGridCellNode,
-  DEPRECATED_GridCellNode,
-} from './nodes/LexicalGridCellNode';
-export {
-  DEPRECATED_$isGridNode,
-  DEPRECATED_GridNode,
-} from './nodes/LexicalGridNode';
-export {
-  DEPRECATED_$isGridRowNode,
-  DEPRECATED_GridRowNode,
-} from './nodes/LexicalGridRowNode';
 export type {SerializedLineBreakNode} from './nodes/LexicalLineBreakNode';
 export {
   $createLineBreakNode,
@@ -169,4 +220,6 @@ export {
   ParagraphNode,
 } from './nodes/LexicalParagraphNode';
 export {$isRootNode, RootNode} from './nodes/LexicalRootNode';
+export type {SerializedTabNode} from './nodes/LexicalTabNode';
+export {$createTabNode, $isTabNode, TabNode} from './nodes/LexicalTabNode';
 export {$createTextNode, $isTextNode, TextNode} from './nodes/LexicalTextNode';

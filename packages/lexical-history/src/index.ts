@@ -1,4 +1,3 @@
-/** @module @lexical/history */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -7,20 +6,10 @@
  *
  */
 
-import type {
-  EditorState,
-  GridSelection,
-  IntentionallyMarkedAsDirtyElement,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
-  NodeSelection,
-  RangeSelection,
-} from 'lexical';
+import type {EditorState, LexicalEditor, LexicalNode, NodeKey} from 'lexical';
 
 import {mergeRegister} from '@lexical/utils';
 import {
-  $getSelection,
   $isRangeSelection,
   $isRootNode,
   $isTextNode,
@@ -48,13 +37,14 @@ const DELETE_CHARACTER_AFTER_SELECTION = 4;
 export type HistoryStateEntry = {
   editor: LexicalEditor;
   editorState: EditorState;
-  undoSelection?: RangeSelection | NodeSelection | GridSelection | null;
 };
 export type HistoryState = {
   current: null | HistoryStateEntry;
   redoStack: Array<HistoryStateEntry>;
   undoStack: Array<HistoryStateEntry>;
 };
+
+type IntentionallyMarkedAsDirtyElement = boolean;
 
 function getDirtyNodes(
   editorState: EditorState,
@@ -200,15 +190,29 @@ function isTextNodeUnchanged(
 ): boolean {
   const prevNode = prevEditorState._nodeMap.get(key);
   const nextNode = nextEditorState._nodeMap.get(key);
-  if ($isTextNode(prevNode) && $isTextNode(nextNode)) {
+
+  const prevSelection = prevEditorState._selection;
+  const nextSelection = nextEditorState._selection;
+  const isDeletingLine =
+    $isRangeSelection(prevSelection) &&
+    $isRangeSelection(nextSelection) &&
+    prevSelection.anchor.type === 'element' &&
+    prevSelection.focus.type === 'element' &&
+    nextSelection.anchor.type === 'text' &&
+    nextSelection.focus.type === 'text';
+
+  if (
+    !isDeletingLine &&
+    $isTextNode(prevNode) &&
+    $isTextNode(nextNode) &&
+    prevNode.__parent === nextNode.__parent
+  ) {
+    // This has the assumption that object key order won't change if the
+    // content did not change, which should normally be safe given
+    // the manner in which nodes and exportJSON are typically implemented.
     return (
-      prevNode.__type === nextNode.__type &&
-      prevNode.__text === nextNode.__text &&
-      prevNode.__mode === nextNode.__mode &&
-      prevNode.__detail === nextNode.__detail &&
-      prevNode.__style === nextNode.__style &&
-      prevNode.__format === nextNode.__format &&
-      prevNode.__parent === nextNode.__parent
+      JSON.stringify(prevEditorState.read(() => prevNode.exportJSON())) ===
+      JSON.stringify(nextEditorState.read(() => nextNode.exportJSON()))
     );
   }
   return false;
@@ -270,11 +274,10 @@ function createMergeActionGetter(
       }
 
       const selection = nextEditorState._selection;
-      const prevSelection = prevEditorState._selection;
       const hasDirtyNodes = dirtyLeaves.size > 0 || dirtyElements.size > 0;
 
       if (!hasDirtyNodes) {
-        if (prevSelection === null && selection !== null) {
+        if (selection !== null) {
           return HISTORY_MERGE;
         }
 
@@ -361,12 +364,9 @@ function undo(editor: LexicalEditor, historyState: HistoryState): void {
     historyState.current = historyStateEntry || null;
 
     if (historyStateEntry) {
-      historyStateEntry.editor.setEditorState(
-        historyStateEntry.editorState.clone(historyStateEntry.undoSelection),
-        {
-          tag: 'historic',
-        },
-      );
+      historyStateEntry.editor.setEditorState(historyStateEntry.editorState, {
+        tag: 'historic',
+      });
     }
   }
 }
@@ -377,6 +377,15 @@ function clearHistory(historyState: HistoryState) {
   historyState.current = null;
 }
 
+/**
+ * Registers necessary listeners to manage undo/redo history stack and related editor commands.
+ * It returns `unregister` callback that cleans up all listeners and should be called on editor unmount.
+ * @param editor - The lexical editor.
+ * @param historyState - The history state, containing the current state and the undo/redo stack.
+ * @param delay - The time (in milliseconds) the editor should delay generating a new history stack,
+ * instead of merging the current changes with the current stack.
+ * @returns The listeners cleanup callback function.
+ */
 export function registerHistory(
   editor: LexicalEditor,
   historyState: HistoryState,
@@ -418,12 +427,12 @@ export function registerHistory(
     if (mergeAction === HISTORY_PUSH) {
       if (redoStack.length !== 0) {
         historyState.redoStack = [];
+        editor.dispatchCommand(CAN_REDO_COMMAND, false);
       }
 
       if (current !== null) {
         undoStack.push({
           ...current,
-          undoSelection: prevEditorState.read($getSelection),
         });
         editor.dispatchCommand(CAN_UNDO_COMMAND, true);
       }
@@ -438,7 +447,7 @@ export function registerHistory(
     };
   };
 
-  const unregisterCommandListener = mergeRegister(
+  const unregister = mergeRegister(
     editor.registerCommand(
       UNDO_COMMAND,
       () => {
@@ -476,14 +485,13 @@ export function registerHistory(
     editor.registerUpdateListener(applyChange),
   );
 
-  const unregisterUpdateListener = editor.registerUpdateListener(applyChange);
-
-  return () => {
-    unregisterCommandListener();
-    unregisterUpdateListener();
-  };
+  return unregister;
 }
 
+/**
+ * Creates an empty history state.
+ * @returns - The empty history state, as an object.
+ */
 export function createEmptyHistoryState(): HistoryState {
   return {
     current: null,

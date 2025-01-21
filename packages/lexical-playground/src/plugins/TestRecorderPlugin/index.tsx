@@ -6,15 +6,15 @@
  *
  */
 
-import type {
-  GridSelection,
-  LexicalEditor,
-  NodeSelection,
-  RangeSelection,
-} from 'lexical';
+import type {BaseSelection, LexicalEditor} from 'lexical';
 
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {$createParagraphNode, $createTextNode, $getRoot} from 'lexical';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  getDOMSelection,
+} from 'lexical';
 import * as React from 'react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {IS_APPLE} from 'shared/environment';
@@ -100,7 +100,10 @@ const formatStep = (step: Step) => {
 };
 
 export function isSelectAll(event: KeyboardEvent): boolean {
-  return event.keyCode === 65 && (IS_APPLE ? event.metaKey : event.ctrlKey);
+  return (
+    event.key.toLowerCase() === 'a' &&
+    (IS_APPLE ? event.metaKey : event.ctrlKey)
+  );
 }
 
 // stolen from LexicalSelection-test
@@ -159,9 +162,7 @@ function useTestRecorder(
   const [isRecording, setIsRecording] = useState(false);
   const [, setCurrentInnerHTML] = useState('');
   const [templatedTest, setTemplatedTest] = useState('');
-  const previousSelectionRef = useRef<
-    RangeSelection | GridSelection | NodeSelection | null
-  >(null);
+  const previousSelectionRef = useRef<BaseSelection | null>(null);
   const skipNextSelectionChangeRef = useRef(false);
   const preRef = useRef<HTMLPreElement>(null);
 
@@ -171,7 +172,7 @@ function useTestRecorder(
 
   const generateTestContent = useCallback(() => {
     const rootElement = editor.getRootElement();
-    const browserSelection = window.getSelection();
+    const browserSelection = getDOMSelection(editor._window);
 
     if (
       rootElement == null ||
@@ -326,7 +327,7 @@ ${steps.map(formatStep).join(`\n`)}
             dirtyElements.size === 0 &&
             !skipNextSelectionChange
           ) {
-            const browserSelection = window.getSelection();
+            const browserSelection = getDOMSelection(editor._window);
             if (
               browserSelection &&
               (browserSelection.anchorNode == null ||
@@ -383,7 +384,7 @@ ${steps.map(formatStep).join(`\n`)}
     if (!isRecording) {
       return;
     }
-    const browserSelection = window.getSelection();
+    const browserSelection = getDOMSelection(getCurrentEditor()._window);
     if (
       browserSelection === null ||
       browserSelection.anchorNode == null ||

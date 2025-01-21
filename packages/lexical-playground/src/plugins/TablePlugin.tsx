@@ -7,27 +7,16 @@
  */
 
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {INSERT_TABLE_COMMAND} from '@lexical/table';
 import {
-  $createNodeSelection,
-  $createParagraphNode,
-  $getSelection,
-  $isRangeSelection,
-  $isRootOrShadowRoot,
-  $setSelection,
-  COMMAND_PRIORITY_EDITOR,
-  createCommand,
-  EditorThemeClasses,
-  Klass,
-  LexicalCommand,
-  LexicalEditor,
-  LexicalNode,
-} from 'lexical';
+  INSERT_TABLE_COMMAND,
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+} from '@lexical/table';
+import {EditorThemeClasses, Klass, LexicalEditor, LexicalNode} from 'lexical';
 import {createContext, useContext, useEffect, useMemo, useState} from 'react';
-import * as React from 'react';
 import invariant from 'shared/invariant';
 
-import {$createTableNodeWithDimensions, TableNode} from '../nodes/TableNode';
 import Button from '../ui/Button';
 import {DialogActions} from '../ui/Dialog';
 import TextInput from '../ui/TextInput';
@@ -55,11 +44,7 @@ export type CellEditorConfig = Readonly<{
   theme?: EditorThemeClasses;
 }>;
 
-export const INSERT_NEW_TABLE_COMMAND: LexicalCommand<InsertTableCommandPayload> =
-  createCommand('INSERT_NEW_TABLE_COMMAND');
-
-// @ts-ignore: not sure why TS doesn't like using null as the value?
-export const CellContext: React.Context<CellContextShape> = createContext({
+export const CellContext = createContext<CellContextShape>({
   cellEditorConfig: null,
   cellEditorPlugins: null,
   set: () => {
@@ -101,44 +86,49 @@ export function InsertTableDialog({
 }): JSX.Element {
   const [rows, setRows] = useState('5');
   const [columns, setColumns] = useState('5');
+  const [isDisabled, setIsDisabled] = useState(true);
+
+  useEffect(() => {
+    const row = Number(rows);
+    const column = Number(columns);
+    if (row && row > 0 && row <= 500 && column && column > 0 && column <= 50) {
+      setIsDisabled(false);
+    } else {
+      setIsDisabled(true);
+    }
+  }, [rows, columns]);
 
   const onClick = () => {
-    activeEditor.dispatchCommand(INSERT_TABLE_COMMAND, {columns, rows});
+    activeEditor.dispatchCommand(INSERT_TABLE_COMMAND, {
+      columns,
+      rows,
+    });
+
     onClose();
   };
 
   return (
     <>
-      <TextInput label="No of rows" onChange={setRows} value={rows} />
-      <TextInput label="No of columns" onChange={setColumns} value={columns} />
+      <TextInput
+        placeholder={'# of rows (1-500)'}
+        label="Rows"
+        onChange={setRows}
+        value={rows}
+        data-test-id="table-modal-rows"
+        type="number"
+      />
+      <TextInput
+        placeholder={'# of columns (1-50)'}
+        label="Columns"
+        onChange={setColumns}
+        value={columns}
+        data-test-id="table-modal-columns"
+        type="number"
+      />
       <DialogActions data-test-id="table-model-confirm-insert">
-        <Button onClick={onClick}>Confirm</Button>
-      </DialogActions>
-    </>
-  );
-}
-
-export function InsertNewTableDialog({
-  activeEditor,
-  onClose,
-}: {
-  activeEditor: LexicalEditor;
-  onClose: () => void;
-}): JSX.Element {
-  const [rows, setRows] = useState('5');
-  const [columns, setColumns] = useState('5');
-
-  const onClick = () => {
-    activeEditor.dispatchCommand(INSERT_NEW_TABLE_COMMAND, {columns, rows});
-    onClose();
-  };
-
-  return (
-    <>
-      <TextInput label="No of rows" onChange={setRows} value={rows} />
-      <TextInput label="No of columns" onChange={setColumns} value={columns} />
-      <DialogActions data-test-id="table-model-confirm-insert">
-        <Button onClick={onClick}>Confirm</Button>
+        <Button disabled={isDisabled} onClick={onClick}>
+          Confirm
+        </Button>
       </DialogActions>
     </>
   );
@@ -153,59 +143,16 @@ export function TablePlugin({
 }): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
   const cellContext = useContext(CellContext);
-
   useEffect(() => {
-    if (!editor.hasNodes([TableNode])) {
-      invariant(false, 'TablePlugin: TableNode is not registered on editor');
+    if (!editor.hasNodes([TableNode, TableRowNode, TableCellNode])) {
+      invariant(
+        false,
+        'TablePlugin: TableNode, TableRowNode, or TableCellNode is not registered on editor',
+      );
     }
-
+  }, [editor]);
+  useEffect(() => {
     cellContext.set(cellEditorConfig, children);
-
-    return editor.registerCommand<InsertTableCommandPayload>(
-      INSERT_TABLE_COMMAND,
-      ({columns, rows, includeHeaders}) => {
-        const selection = $getSelection();
-
-        if (!$isRangeSelection(selection)) {
-          return true;
-        }
-
-        const focus = selection.focus;
-        const focusNode = focus.getNode();
-
-        if (focusNode !== null) {
-          const tableNode = $createTableNodeWithDimensions(
-            Number(rows),
-            Number(columns),
-            includeHeaders,
-          );
-
-          if ($isRootOrShadowRoot(focusNode)) {
-            const target = focusNode.getChildAtIndex(focus.offset);
-
-            if (target !== null) {
-              target.insertBefore(tableNode);
-            } else {
-              focusNode.append(tableNode);
-            }
-
-            tableNode.insertBefore($createParagraphNode());
-          } else {
-            const topLevelNode = focusNode.getTopLevelElementOrThrow();
-            topLevelNode.insertAfter(tableNode);
-          }
-
-          tableNode.insertAfter($createParagraphNode());
-          const nodeSelection = $createNodeSelection();
-          nodeSelection.add(tableNode.getKey());
-          $setSelection(nodeSelection);
-        }
-
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR,
-    );
-  }, [cellContext, cellEditorConfig, children, editor]);
-
+  }, [cellContext, cellEditorConfig, children]);
   return null;
 }

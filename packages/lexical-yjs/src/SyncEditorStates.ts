@@ -6,13 +6,8 @@
  *
  */
 
-import type {
-  EditorState,
-  IntentionallyMarkedAsDirtyElement,
-  NodeKey,
-} from 'lexical';
+import type {EditorState, NodeKey} from 'lexical';
 
-import {$createOffsetView} from '@lexical/offset';
 import {
   $createParagraphNode,
   $getNodeByKey,
@@ -20,31 +15,31 @@ import {
   $getSelection,
   $isRangeSelection,
   $isTextNode,
-  $setSelection,
 } from 'lexical';
 import invariant from 'shared/invariant';
-import {WebsocketProvider} from 'y-websocket';
 import {Text as YText, YEvent, YMapEvent, YTextEvent, YXmlEvent} from 'yjs';
 
-import {Binding} from '.';
+import {Binding, Provider} from '.';
 import {CollabDecoratorNode} from './CollabDecoratorNode';
 import {CollabElementNode} from './CollabElementNode';
 import {CollabTextNode} from './CollabTextNode';
 import {
+  $syncLocalCursorPosition,
   syncCursorPositions,
+  SyncCursorPositionsFn,
   syncLexicalSelectionToYjs,
-  syncLocalCursorPosition,
 } from './SyncCursors';
 import {
+  $getOrInitCollabNodeFromSharedType,
+  $moveSelectionToPreviousNode,
   doesSelectionNeedRecovering,
-  getOrInitCollabNodeFromSharedType,
   syncWithTransaction,
 } from './Utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function syncEvent(binding: Binding, event: any): void {
+function $syncEvent(binding: Binding, event: any): void {
   const {target} = event;
-  const collabNode = getOrInitCollabNodeFromSharedType(binding, target);
+  const collabNode = $getOrInitCollabNodeFromSharedType(binding, target);
 
   if (collabNode instanceof CollabElementNode && event instanceof YTextEvent) {
     // @ts-expect-error We need to access the private property of the class
@@ -86,66 +81,40 @@ function syncEvent(binding: Binding, event: any): void {
 
 export function syncYjsChangesToLexical(
   binding: Binding,
-  provider: WebsocketProvider,
+  provider: Provider,
   events: Array<YEvent<YText>>,
+  isFromUndoManger: boolean,
+  syncCursorPositionsFn: SyncCursorPositionsFn = syncCursorPositions,
 ): void {
   const editor = binding.editor;
   const currentEditorState = editor._editorState;
+
+  // This line precompute the delta before editor update. The reason is
+  // delta is computed when it is accessed. Note that this can only be
+  // safely computed during the event call. If it is accessed after event
+  // call it might result in unexpected behavior.
+  // https://github.com/yjs/yjs/blob/00ef472d68545cb260abd35c2de4b3b78719c9e4/src/utils/YEvent.js#L132
+  events.forEach((event) => event.delta);
+
   editor.update(
     () => {
-      const pendingEditorState: EditorState | null = editor._pendingEditorState;
-
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
-        syncEvent(binding, event);
+        $syncEvent(binding, event);
       }
 
       const selection = $getSelection();
 
       if ($isRangeSelection(selection)) {
-        // We can't use Yjs's cursor position here, as it doesn't always
-        // handle selection recovery correctly – especially on elements that
-        // get moved around or split. So instead, we roll our own solution.
         if (doesSelectionNeedRecovering(selection)) {
           const prevSelection = currentEditorState._selection;
 
           if ($isRangeSelection(prevSelection)) {
-            const prevOffsetView = $createOffsetView(
-              editor,
-              0,
-              currentEditorState,
-            );
-            const nextOffsetView = $createOffsetView(
-              editor,
-              0,
-              pendingEditorState,
-            );
-            const [start, end] =
-              prevOffsetView.getOffsetsFromSelection(prevSelection);
-            const nextSelection = nextOffsetView.createSelectionFromOffsets(
-              start,
-              end,
-              prevOffsetView,
-            );
-
-            if (nextSelection !== null) {
-              $setSelection(nextSelection);
-            } else {
-              // Fallback is to use the Yjs cursor position
-              syncLocalCursorPosition(binding, provider);
-
-              if (doesSelectionNeedRecovering(selection)) {
-                const root = $getRoot();
-
-                // If there was a collision on the top level paragraph
-                // we need to re-add a paragraph
-                if (root.getChildrenSize() === 0) {
-                  root.append($createParagraphNode());
-                }
-
-                // Fallback
-                $getRoot().selectEnd();
-              }
+            $syncLocalCursorPosition(binding, provider);
+            if (doesSelectionNeedRecovering(selection)) {
+              // If the selected node is deleted, move the selection to the previous or parent node.
+              const anchorNodeKey = selection.anchor.key;
+              $moveSelectionToPreviousNode(anchorNodeKey, currentEditorState);
             }
           }
 
@@ -156,21 +125,29 @@ export function syncYjsChangesToLexical(
             $getSelection(),
           );
         } else {
-          syncLocalCursorPosition(binding, provider);
+          $syncLocalCursorPosition(binding, provider);
         }
       }
     },
     {
       onUpdate: () => {
-        syncCursorPositions(binding, provider);
+        syncCursorPositionsFn(binding, provider);
+        // If there was a collision on the top level paragraph
+        // we need to re-add a paragraph. To ensure this insertion properly syncs with other clients,
+        // it must be placed outside of the update block above that has tags 'collaboration' or 'historic'.
+        editor.update(() => {
+          if ($getRoot().getChildrenSize() === 0) {
+            $getRoot().append($createParagraphNode());
+          }
+        });
       },
       skipTransforms: true,
-      tag: 'collaboration',
+      tag: isFromUndoManger ? 'historic' : 'collaboration',
     },
   );
 }
 
-function handleNormalizationMergeConflicts(
+function $handleNormalizationMergeConflicts(
   binding: Binding,
   normalizedNodes: Set<NodeKey>,
 ): void {
@@ -217,9 +194,11 @@ function handleNormalizationMergeConflicts(
   }
 }
 
+type IntentionallyMarkedAsDirtyElement = boolean;
+
 export function syncLexicalUpdateToYjs(
   binding: Binding,
-  provider: WebsocketProvider,
+  provider: Provider,
   prevEditorState: EditorState,
   currEditorState: EditorState,
   dirtyElements: Map<NodeKey, IntentionallyMarkedAsDirtyElement>,
@@ -236,9 +215,9 @@ export function syncLexicalUpdateToYjs(
       // types a character and we get it, we don't want to then insert
       // the same character again. The exception to this heuristic is
       // when we need to handle normalization merge conflicts.
-      if (tags.has('collaboration')) {
+      if (tags.has('collaboration') || tags.has('historic')) {
         if (normalizedNodes.size > 0) {
-          handleNormalizationMergeConflicts(binding, normalizedNodes);
+          $handleNormalizationMergeConflicts(binding, normalizedNodes);
         }
 
         return;

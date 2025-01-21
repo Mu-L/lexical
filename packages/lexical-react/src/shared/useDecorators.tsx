@@ -6,7 +6,7 @@
  *
  */
 
-import type {LexicalEditor} from 'lexical';
+import type {LexicalEditor, NodeKey} from 'lexical';
 
 import {Suspense, useEffect, useMemo, useState} from 'react';
 import * as React from 'react';
@@ -17,6 +17,7 @@ type ErrorBoundaryProps = {
   children: JSX.Element;
   onError: (error: Error) => void;
 };
+
 export type ErrorBoundaryType =
   | React.ComponentClass<ErrorBoundaryProps>
   | React.FC<ErrorBoundaryProps>;
@@ -25,7 +26,7 @@ export function useDecorators(
   editor: LexicalEditor,
   ErrorBoundary: ErrorBoundaryType,
 ): Array<JSX.Element> {
-  const [decorators, setDecorators] = useState<Record<string, JSX.Element>>(
+  const [decorators, setDecorators] = useState<Record<NodeKey, JSX.Element>>(
     () => editor.getDecorators<JSX.Element>(),
   );
 
@@ -60,7 +61,7 @@ export function useDecorators(
       const element = editor.getElementByKey(nodeKey);
 
       if (element !== null) {
-        decoratedPortals.push(createPortal(reactDecorator, element));
+        decoratedPortals.push(createPortal(reactDecorator, element, nodeKey));
       }
     }
 

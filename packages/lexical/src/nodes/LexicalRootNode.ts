@@ -6,7 +6,7 @@
  *
  */
 
-import type {LexicalNode} from '../LexicalNode';
+import type {LexicalNode, SerializedLexicalNode} from '../LexicalNode';
 import type {SerializedElementNode} from './LexicalElementNode';
 
 import invariant from 'shared/invariant';
@@ -17,7 +17,9 @@ import {$getRoot} from '../LexicalUtils';
 import {$isDecoratorNode} from './LexicalDecoratorNode';
 import {$isElementNode, ElementNode} from './LexicalElementNode';
 
-export type SerializedRootNode = SerializedElementNode;
+export type SerializedRootNode<
+  T extends SerializedLexicalNode = SerializedLexicalNode,
+> = SerializedElementNode<T>;
 
 /** @noInheritDoc */
 export class RootNode extends ElementNode {
@@ -75,7 +77,7 @@ export class RootNode extends ElementNode {
 
   // View
 
-  updateDOM(prevNode: RootNode, dom: HTMLElement): false {
+  updateDOM(prevNode: this, dom: HTMLElement): false {
     return false;
   }
 
@@ -96,22 +98,11 @@ export class RootNode extends ElementNode {
 
   static importJSON(serializedNode: SerializedRootNode): RootNode {
     // We don't create a root, and instead use the existing root.
-    const node = $getRoot();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
+    return $getRoot().updateFromJSON(serializedNode);
   }
 
-  exportJSON(): SerializedRootNode {
-    return {
-      children: [],
-      direction: this.getDirection(),
-      format: this.getFormatType(),
-      indent: this.getIndent(),
-      type: 'root',
-      version: 1,
-    };
+  collapseAtStart(): true {
+    return true;
   }
 }
 

@@ -18,20 +18,18 @@ import {
   $getNodeByKey,
   $getSelection,
   $isNodeSelection,
+  BaseSelection,
   CLICK_COMMAND,
   COMMAND_PRIORITY_LOW,
-  GridSelection,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   NodeKey,
-  NodeSelection,
-  RangeSelection,
 } from 'lexical';
 import * as React from 'react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import Button from '../ui/Button';
-import joinClasses from '../utils/join-classes';
+import joinClasses from '../utils/joinClasses';
 import {$isPollNode, createPollOption} from './PollNode';
 
 function getTotalVotes(options: Options): number {
@@ -51,7 +49,10 @@ function PollOptionComponent({
   option: Option;
   options: Options;
   totalVotes: number;
-  withPollNode: (cb: (pollNode: PollNode) => void) => void;
+  withPollNode: (
+    cb: (pollNode: PollNode) => void,
+    onSelect?: () => void,
+  ) => void;
 }): JSX.Element {
   const {clientID} = useCollaborationContext();
   const checkboxRef = useRef(null);
@@ -93,9 +94,19 @@ function PollOptionComponent({
           type="text"
           value={text}
           onChange={(e) => {
-            withPollNode((node) => {
-              node.setOptionText(option, e.target.value);
-            });
+            const target = e.target;
+            const value = target.value;
+            const selectionStart = target.selectionStart;
+            const selectionEnd = target.selectionEnd;
+            withPollNode(
+              (node) => {
+                node.setOptionText(option, value);
+              },
+              () => {
+                target.selectionStart = selectionStart;
+                target.selectionEnd = selectionEnd;
+              },
+            );
           }}
           placeholder={`Option ${index + 1}`}
         />
@@ -106,7 +117,7 @@ function PollOptionComponent({
           'PollNode__optionDelete',
           options.length < 3 && 'PollNode__optionDeleteDisabled',
         )}
-        arial-label="Remove"
+        aria-label="Remove"
         onClick={() => {
           withPollNode((node) => {
             node.deleteOption(option);
@@ -130,25 +141,24 @@ export default function PollComponent({
   const totalVotes = useMemo(() => getTotalVotes(options), [options]);
   const [isSelected, setSelected, clearSelection] =
     useLexicalNodeSelection(nodeKey);
-  const [selection, setSelection] = useState<
-    RangeSelection | NodeSelection | GridSelection | null
-  >(null);
+  const [selection, setSelection] = useState<BaseSelection | null>(null);
   const ref = useRef(null);
 
-  const onDelete = useCallback(
+  const $onDelete = useCallback(
     (payload: KeyboardEvent) => {
-      if (isSelected && $isNodeSelection($getSelection())) {
+      const deleteSelection = $getSelection();
+      if (isSelected && $isNodeSelection(deleteSelection)) {
         const event: KeyboardEvent = payload;
         event.preventDefault();
-        const node = $getNodeByKey(nodeKey);
-        if ($isPollNode(node)) {
-          node.remove();
-        }
-        setSelected(false);
+        deleteSelection.getNodes().forEach((node) => {
+          if ($isPollNode(node)) {
+            node.remove();
+          }
+        });
       }
       return false;
     },
-    [isSelected, nodeKey, setSelected],
+    [isSelected],
   );
 
   useEffect(() => {
@@ -175,24 +185,30 @@ export default function PollComponent({
       ),
       editor.registerCommand(
         KEY_DELETE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
       editor.registerCommand(
         KEY_BACKSPACE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
     );
-  }, [clearSelection, editor, isSelected, nodeKey, onDelete, setSelected]);
+  }, [clearSelection, editor, isSelected, nodeKey, $onDelete, setSelected]);
 
-  const withPollNode = (cb: (node: PollNode) => void): void => {
-    editor.update(() => {
-      const node = $getNodeByKey(nodeKey);
-      if ($isPollNode(node)) {
-        cb(node);
-      }
-    });
+  const withPollNode = (
+    cb: (node: PollNode) => void,
+    onUpdate?: () => void,
+  ): void => {
+    editor.update(
+      () => {
+        const node = $getNodeByKey(nodeKey);
+        if ($isPollNode(node)) {
+          cb(node);
+        }
+      },
+      {onUpdate},
+    );
   };
 
   const addOption = () => {

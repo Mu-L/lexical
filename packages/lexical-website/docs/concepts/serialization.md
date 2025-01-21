@@ -1,6 +1,4 @@
----
-sidebar_position: 9
----
+
 
 # Serialization & Deserialization
 
@@ -51,7 +49,7 @@ editor.update(() => {
 
   // Once you have the DOM instance it's easy to generate LexicalNodes.
   const nodes = $generateNodesFromDOM(editor, dom);
-  
+
   // Select the root
   $getRoot().select();
 
@@ -76,7 +74,7 @@ editor.update(() => {
 
   // Once you have the DOM instance it's easy to generate LexicalNodes.
   const nodes = $generateNodesFromDOM(editor, dom.window.document);
-  
+
   // Select the root
   $getRoot().select();
 
@@ -86,6 +84,12 @@ editor.update(() => {
 });
 ```
 
+:::tip
+
+Remember that state updates are asynchronous, so executing `editor.getEditorState()` immediately afterwards might not return the expected content. To avoid it, [pass `discrete: true` in the `editor.update` method](https://dio.la/article/lexical-state-updates#discrete-updates).
+
+:::
+
 #### `LexicalNode.importDOM()`
 You can control how an `HTMLElement` is represented in `Lexical` by adding an `importDOM()` method to your `LexicalNode`.
 
@@ -94,31 +98,29 @@ static importDOM(): DOMConversionMap | null;
 ```
 The return value of `importDOM` is a map of the lower case (DOM) [Node.nodeName](https://developer.mozilla.org/en-US/docs/Web/API/Node/nodeName) property to an object that specifies a conversion function and a priority for that conversion. This allows `LexicalNodes` to specify which type of DOM nodes they can convert and what the relative priority of their conversion should be. This is useful in cases where a DOM Node with specific attributes should be interpreted as one type of `LexicalNode`, and otherwise it should be represented as another type of `LexicalNode`.
 
-```js
-export type DOMConversionMap = {
-  [NodeName]: <T: HTMLElement>(node: T) => DOMConversion | null,
+```ts
+type DOMConversionMap = Record<
+  string,
+  (node: HTMLElement) => DOMConversion | null
+>;
+
+type DOMConversion = {
+  conversion: DOMConversionFn;
+  priority: 0 | 1 | 2 | 3 | 4;
 };
 
-export type DOMConversion = {
-  conversion: DOMConversionFn,
-  priority: 0 | 1 | 2 | 3 | 4,
+type DOMConversionFn = (element: HTMLElement) => DOMConversionOutput | null;
+
+type DOMConversionOutput = {
+  after?: (childLexicalNodes: Array<LexicalNode>) => Array<LexicalNode>;
+  forChild?: DOMChildConversion;
+  node: null | LexicalNode | Array<LexicalNode>;
 };
 
-export type DOMConversionFn = (
-  element: Node,
-  parent?: Node,
-  preformatted?: boolean,
-) => DOMConversionOutput;
-
-export type DOMConversionOutput = {
-  after?: (childLexicalNodes: Array<LexicalNode>) => Array<LexicalNode>,
-  forChild?: DOMChildConversion,
-  node: LexicalNode | null,
-};
-
-export type DOMChildConversion = (
+type DOMChildConversion = (
   lexicalNode: LexicalNode,
-) => LexicalNode | null | void;
+  parentLexicalNode: LexicalNode | null | undefined,
+) => LexicalNode | null | undefined;
 ```
 
 @lexical/code provides a good example of the usefulness of this design. GitHub uses HTML ```<table>``` elements to represent the structure of copied code in HTML. If we interpreted all HTML ```<table>``` elements as literal tables, then code pasted from GitHub would appear in Lexical as a Lexical TableNode. Instead, CodeNode specifies that it can handle ```<table>``` elements too:
@@ -133,7 +135,7 @@ static importDOM(): DOMConversionMap | null {
       if (isGitHubCodeTable(node as HTMLTableElement)) {
         return {
           conversion: convertTableElement,
-          priority: 4,
+          priority: 3,
         };
       }
       return null;
@@ -147,27 +149,7 @@ static importDOM(): DOMConversionMap | null {
 
 If the imported ```<table>``` doesn't align with the expected GitHub code HTML, then we return null and allow the node to be handled by lower priority conversions.
 
-Much like `exportDOM`, `importDOM` exposes APIs to allow for post-processing of converted Nodes. The conversion function returns a `DOMConversionOutput` which can specify a function to run for each converted child (forChild) or on all the child nodes after the conversion is complete (after). The key difference here is that ```forChild``` runs for every deeply nested child node of the current node, whereas ```after``` will run only once after the transformation of the node and all its children is complete. Finally, `preformatted` flag indicates that nested text content is preformatted (similar to `<pre>` tag) and all newlines and spaces should be preserved as is.
-
-```js
-export type DOMConversionFn = (
-  element: Node,
-  parent?: Node,
-  preformatted?: boolean,
-) => DOMConversionOutput;
-
-export type DOMConversionOutput = {
-  after?: (childLexicalNodes: Array<LexicalNode>) => Array<LexicalNode>,
-  forChild?: DOMChildConversion,
-  node: LexicalNode | null,
-};
-
-export type DOMChildConversion = (
-  lexicalNode: LexicalNode,
-  parentLexicalNode: LexicalNode | null | undefined,
-) => LexicalNode | null;
-```
-
+Much like `exportDOM`, `importDOM` exposes APIs to allow for post-processing of converted Nodes. The conversion function returns a `DOMConversionOutput` which can specify a function to run for each converted child (forChild) or on all the child nodes after the conversion is complete (after). The key difference here is that ```forChild``` runs for every deeply nested child node of the current node, whereas ```after``` will run only once after the transformation of the node and all its children is complete. 
 
 ## JSON
 
@@ -188,7 +170,7 @@ const jsonString = JSON.stringify(editorState);
 
 #### `LexicalNode.exportJSON()`
 
-You can control how a `LexicalNode` is represented as JSON by adding an `exportJSON()` method. It's important to ensure your serialized JSON node has a `type` field and a `children` field if it's an `ElementNode`.
+You can control how a `LexicalNode` is represented as JSON by adding an `exportJSON()` method. It's important that you extend the serialization of the superclass by invoking `super`: e.g. `{ ...super.exportJSON(), /* your other properties */ }`.
 
 ```js
 export type SerializedLexicalNode = {
@@ -207,8 +189,6 @@ Here's an example of `exportJSON` for the `HeadingNode`:
 export type SerializedHeadingNode = Spread<
   {
     tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
-    type: 'heading';
-    version: 1;
   },
   SerializedElementNode
 >;
@@ -217,15 +197,13 @@ exportJSON(): SerializedHeadingNode {
   return {
     ...super.exportJSON(),
     tag: this.getTag(),
-    type: 'heading',
-    version: 1,
   };
 }
 ```
 
 #### `LexicalNode.importJSON()`
 
-You can control how a `LexicalNode` is serialized back into a node from JSON by adding an `importJSON()` method.
+You can control how a `LexicalNode` is deserialized back into a node from JSON by adding an `importJSON()` method.
 
 ```js
 export type SerializedLexicalNode = {
@@ -238,23 +216,62 @@ importJSON(jsonNode: SerializedLexicalNode): LexicalNode
 
 This method works in the opposite way to how `exportJSON` works. Lexical uses the `type` field on the JSON object to determine what Lexical node class it needs to map to, so keeping the `type` field consistent with the `getType()` of the LexicalNode is essential.
 
+You should use the `updateFromJSON` method in your `importJSON` to simplify the implementation and allow for future extension by the base classes.
+
 Here's an example of `importJSON` for the `HeadingNode`:
 
-```js
+```ts
 static importJSON(serializedNode: SerializedHeadingNode): HeadingNode {
-  const node = $createHeadingNode(serializedNode.tag);
-  node.setFormat(serializedNode.format);
-  node.setIndent(serializedNode.indent);
-  node.setDirection(serializedNode.direction);
-  return node;
+  return $createHeadingNode().updateFromJSON(serializedNode);
+}
+
+updateFromJSON(
+  serializedNode: LexicalUpdateJSON<SerializedHeadingNode>,
+): this {
+  return super.updateFromJSON(serializedNode).setTag(serializedNode.tag);
 }
 ```
+
+#### `LexicalNode.updateFromJSON()`
+
+`updateFromJSON` is a method introduced in Lexical 0.23 to simplify the implementation of `importJSON`, so that a base class can expose the code that it is using to set all of the node's properties based on the JSON to any subclass.
+
+:::note
+
+The input type used in this method is not sound in the general case, but it is safe if subclasses only add optional properties to the JSON. Even though it is not sound, the usage in this library is safe as long as your `importJSON` method does not upcast the node before calling `updateFromJSON`.
+
+```ts
+export type SerializedExtendedTextNode = Spread<
+  // UNSAFE. This property is not optional
+  { newProperty: string },
+  SerializedTextNode
+>;
+```
+
+```ts
+export type SerializedExtendedTextNode = Spread<
+  // SAFE. This property is not optional
+  { newProperty?: string },
+  SerializedTextNode
+>;
+```
+
+This is because it's possible to cast to a more general type, e.g.
+
+```ts
+const serializedNode: SerializedTextNode = { /* ... */ };
+const newNode: TextNode = $createExtendedTextNode();
+// This passes the type check, but would fail at runtime if the updateFromJSON method required newProperty
+newNode.updateFromJSON(serializedNode);
+```
+
+:::
 
 ### Versioning & Breaking Changes
 
 It's important to note that you should avoid making breaking changes to existing fields in your JSON object, especially if backwards compatibility is an important part of your editor. That's why we recommend using a version field to separate the different changes in your node as you add or change functionality of custom nodes. Here's the serialized type definition for Lexical's base `TextNode` class:
 
-```js
+```ts
 import type {Spread} from 'lexical';
 
 // Spread is a Typescript utility that allows us to spread the properties
@@ -271,22 +288,10 @@ export type SerializedTextNode = Spread<
 >;
 ```
 
-If we wanted to make changes to the above `TextNode`, we should be sure to not remove or change an existing property, as this can cause data corruption. Instead, opt to add the functionality as a new property field instead, and use the version to determine how to handle the differences in your node.
+If we wanted to make changes to the above `TextNode`, we should be sure to not remove or change an existing property, as this can cause data corruption. Instead, opt to add the functionality as a new optional property field instead.
 
-```js
-export type SerializedTextNodeV1 = Spread<
-  {
-    detail: number;
-    format: number;
-    mode: TextModeType;
-    style: string;
-    text: string;
-    version: 1,
-  },
-  SerializedLexicalNode
->;
-
-export type SerializedTextNodeV2 = Spread<
+```ts
+export type SerializedTextNode = Spread<
   {
     detail: number;
     format: number;
@@ -294,12 +299,228 @@ export type SerializedTextNodeV2 = Spread<
     style: string;
     text: string;
     // Our new field we've added
-    newField: string,
-    // Notice the version is now 2
-    version: 2,
+    newField?: string,
   },
   SerializedLexicalNode
 >;
-
-export type SerializedTextNode = SerializedTextNodeV1 | SerializedTextNodeV2;
 ```
+
+### Dangers of a flat version property
+
+The `updateFromJSON` method should ignore `type` and `version`, to support subclassing and code re-use. Ideally, you should only evolve your types in a backwards compatible way (new fields are optional), and/or have a uniquely named property to store the version in your class. Generally speaking, it's best if nearly all properties are optional and the node provides defaults for each property. This allows you to write less boilerplate code and produce smaller JSON.
+
+The reason that `version` is no longer recommended is that it does not compose with subclasses. Consider this hierarchy:
+
+```ts
+class TextNode {
+  exportJSON() {
+    return { /* ... */, version: 1 };
+  }
+}
+class ExtendedTextNode extends TextNode {
+  exportJSON() {
+    return { ...super.exportJSON() };
+  }
+}
+```
+
+If `TextNode` is updated to `version: 2` then this version and new serialization will propagate to `ExtendedTextNode` via the `super.exportJSON()` call, but this leaves nowhere to store a version for `ExtendedTextNode` or vice versa. If the `ExtendedTextNode` explicitly specified a `version`, then the version of the base class will be ignored even though the representation of the JSON from the base class may change:
+
+```ts
+class TextNode {
+  exportJSON() {
+    return { /* ... */, version: 2 };
+  }
+}
+class ExtendedTextNode extends TextNode {
+  exportJSON() {
+    // The super's layout has changed, but the version information is lost
+    return { ...super.exportJSON(), version: 1 };
+  }
+}
+```
+
+So then you have a situation where there are possibly two JSON layouts for `ExtendedTextNode` with the same version, because the base class version changed due to a package upgrade.
+
+If you do have incompatible representations, it's probably best to choose a new type. This is basically the only way that will force old configurations to fail, as `importJSON` implementations often don't do runtime validation and dangerously assume that the values are the correct type.
+
+There are other schemes that would allow for composable versions, such as nesting the superclass data, or choosing a different name for a version property in each subclass. In practice, explicit versioning is generally redundant if the serialization is properly parsed, so it is recommended that you use the simpler approach with a flat representation with mostly optional properties.
+
+### Handling extended HTML styling
+
+Since the TextNode is foundational to all Lexical packages, including the plain text use case. Handling any rich text logic is undesirable. This creates the need to override the TextNode to handle serialization and deserialization of HTML/CSS styling properties to achieve full fidelity between JSON \<-\> HTML. Since this is a very popular use case, below we are proving a recipe to handle the most common use cases.
+
+You need to override the base TextNode:
+
+```js
+const initialConfig: InitialConfigType = {
+    namespace: 'editor',
+    theme: editorThemeClasses,
+    onError: (error: any) => console.log(error),
+    nodes: [
+      ExtendedTextNode,
+      {
+        replace: TextNode,
+        with: (node: TextNode) => new ExtendedTextNode(node.__text),
+        withKlass: ExtendedTextNode,
+      },
+      ListNode,
+      ListItemNode,
+    ]
+  };
+```
+
+and create a new Extended Text Node plugin
+
+```js
+import {
+  $applyNodeReplacement,
+  $isTextNode,
+  DOMConversion,
+  DOMConversionMap,
+  DOMConversionOutput,
+  NodeKey,
+  TextNode,
+  SerializedTextNode,
+  LexicalNode
+} from 'lexical';
+
+export class ExtendedTextNode extends TextNode {
+  constructor(text: string, key?: NodeKey) {
+    super(text, key);
+  }
+
+  static getType(): string {
+    return 'extended-text';
+  }
+
+  static clone(node: ExtendedTextNode): ExtendedTextNode {
+    return new ExtendedTextNode(node.__text, node.__key);
+  }
+
+  static importDOM(): DOMConversionMap | null {
+    const importers = TextNode.importDOM();
+    return {
+      ...importers,
+      code: () => ({
+        conversion: patchStyleConversion(importers?.code),
+        priority: 1
+      }),
+      em: () => ({
+        conversion: patchStyleConversion(importers?.em),
+        priority: 1
+      }),
+      span: () => ({
+        conversion: patchStyleConversion(importers?.span),
+        priority: 1
+      }),
+      strong: () => ({
+        conversion: patchStyleConversion(importers?.strong),
+        priority: 1
+      }),
+      sub: () => ({
+        conversion: patchStyleConversion(importers?.sub),
+        priority: 1
+      }),
+      sup: () => ({
+        conversion: patchStyleConversion(importers?.sup),
+        priority: 1
+      }),
+    };
+  }
+
+  static importJSON(serializedNode: SerializedTextNode): TextNode {
+    return $createExtendedTextNode().updateFromJSON(serializedNode);
+  }
+
+  isSimpleText() {
+    return this.__type === 'extended-text' && this.__mode === 0;
+  }
+
+  // no need to add exportJSON here, since we are not adding any new properties
+}
+
+export function $createExtendedTextNode(text: string = ''): ExtendedTextNode {
+  return $applyNodeReplacement(new ExtendedTextNode(text));
+}
+
+export function $isExtendedTextNode(node: LexicalNode | null | undefined): node is ExtendedTextNode {
+	return node instanceof ExtendedTextNode;
+}
+
+function patchStyleConversion(
+  originalDOMConverter?: (node: HTMLElement) => DOMConversion | null
+): (node: HTMLElement) => DOMConversionOutput | null {
+  return (node) => {
+    const original = originalDOMConverter?.(node);
+    if (!original) {
+      return null;
+    }
+    const originalOutput = original.conversion(node);
+
+    if (!originalOutput) {
+      return originalOutput;
+    }
+
+    const backgroundColor = node.style.backgroundColor;
+    const color = node.style.color;
+    const fontFamily = node.style.fontFamily;
+    const fontWeight = node.style.fontWeight;
+    const fontSize = node.style.fontSize;
+    const textDecoration = node.style.textDecoration;
+
+    return {
+      ...originalOutput,
+      forChild: (lexicalNode, parent) => {
+        const originalForChild = originalOutput?.forChild ?? ((x) => x);
+        const result = originalForChild(lexicalNode, parent);
+        if ($isTextNode(result)) {
+          const style = [
+            backgroundColor ? `background-color: ${backgroundColor}` : null,
+            color ? `color: ${color}` : null,
+            fontFamily ? `font-family: ${fontFamily}` : null,
+            fontWeight ? `font-weight: ${fontWeight}` : null,
+            fontSize ? `font-size: ${fontSize}` : null,
+            textDecoration ? `text-decoration: ${textDecoration}` : null,
+          ]
+            .filter((value) => value != null)
+            .join('; ');
+          if (style.length) {
+            return result.setStyle(style);
+          }
+        }
+        return result;
+      }
+    };
+  };
+}
+```
+
+### `html` Property for Import and Export Configuration
+
+The `html` property in `CreateEditorArgs` provides an alternate way to configure HTML import and export behavior in Lexical without subclassing or node replacement. It includes two properties:
+
+- `import` - Similar to `importDOM`, it controls how HTML elements are transformed into `LexicalNodes`. However, instead of defining conversions directly on each `LexicalNode`, `html.import` provides a configuration that can be overridden easily in the editor setup.
+  
+- `export` - Similar to `exportDOM`, this property customizes how `LexicalNodes` are serialized into HTML. With `html.export`, users can specify transformations for various nodes collectively, offering a flexible override mechanism that can adapt without needing to extend or replace specific `LexicalNodes`.
+
+#### Key Differences from `importDOM` and `exportDOM`
+
+While `importDOM` and `exportDOM` allow for highly customized, node-specific conversions by defining them directly within the `LexicalNode` class, the `html` property enables broader, editor-wide configurations. This setup benefits situations where:
+
+- **Consistent Transformations**: You want uniform import/export behavior across different nodes without adjusting each node individually.
+- **No Subclassing Required**: Overrides to import and export logic are applied at the editor configuration level, simplifying customization and reducing the need for extensive subclassing.
+
+#### Type Definitions
+
+```typescript
+type HTMLConfig = {
+  export?: DOMExportOutputMap;  // Optional map defining how nodes are exported to HTML.
+  import?: DOMConversionMap;     // Optional record defining how HTML is converted into nodes.
+};
+```
+
+#### Example of a use case for the `html` Property for Import and Export Configuration:
+
+[Rich text sandbox](https://stackblitz.com/github/facebook/lexical/tree/main/examples/react-rich?embed=1&file=src%2FApp.tsx&terminalHeight=0&ctl=1&showSidebar=0&devtoolsheight=0&view=preview)
+

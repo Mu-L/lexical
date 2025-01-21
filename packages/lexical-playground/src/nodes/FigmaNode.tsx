@@ -57,8 +57,6 @@ function FigmaComponent({
 export type SerializedFigmaNode = Spread<
   {
     documentID: string;
-    type: 'figma';
-    version: 1;
   },
   SerializedDecoratorBlockNode
 >;
@@ -75,17 +73,15 @@ export class FigmaNode extends DecoratorBlockNode {
   }
 
   static importJSON(serializedNode: SerializedFigmaNode): FigmaNode {
-    const node = $createFigmaNode(serializedNode.documentID);
-    node.setFormat(serializedNode.format);
-    return node;
+    return $createFigmaNode(serializedNode.documentID).updateFromJSON(
+      serializedNode,
+    );
   }
 
   exportJSON(): SerializedFigmaNode {
     return {
       ...super.exportJSON(),
       documentID: this.__id,
-      type: 'figma',
-      version: 1,
     };
   }
 
@@ -123,10 +119,6 @@ export class FigmaNode extends DecoratorBlockNode {
         documentID={this.__id}
       />
     );
-  }
-
-  isInline(): false {
-    return false;
   }
 }
 
