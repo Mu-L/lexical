@@ -54,7 +54,9 @@ export class CollabLineBreakNode {
 
   destroy(binding: Binding): void {
     const collabNodeMap = binding.collabNodeMap;
-    collabNodeMap.delete(this._key);
+    if (collabNodeMap.get(this._key) === this) {
+      collabNodeMap.delete(this._key);
+    }
   }
 }
 
@@ -63,7 +65,6 @@ export function $createCollabLineBreakNode(
   parent: CollabElementNode,
 ): CollabLineBreakNode {
   const collabNode = new CollabLineBreakNode(map, parent);
-  // @ts-expect-error: internal field
   map._collabNode = collabNode;
   return collabNode;
 }

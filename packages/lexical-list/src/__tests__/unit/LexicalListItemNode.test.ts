@@ -6,11 +6,21 @@
  *
  */
 
-import {$getRoot, TextNode} from 'lexical';
-import {initializeUnitTest} from 'lexical/src/__tests__/utils';
+import {
+  $createParagraphNode,
+  $createRangeSelection,
+  $getRoot,
+  TextNode,
+} from 'lexical';
+import {
+  expectHtmlToBeEqual,
+  html,
+  initializeUnitTest,
+} from 'lexical/src/__tests__/utils';
 
 import {
   $createListItemNode,
+  $createListNode,
   $isListItemNode,
   ListItemNode,
   ListNode,
@@ -50,16 +60,22 @@ describe('LexicalListItemNode tests', () => {
       await editor.update(() => {
         const listItemNode = new ListItemNode();
 
-        expect(listItemNode.createDOM(editorConfig).outerHTML).toBe(
-          '<li value="1" class="my-listItem-item-class"></li>',
+        expectHtmlToBeEqual(
+          listItemNode.createDOM(editorConfig).outerHTML,
+          html`
+            <li class="my-listItem-item-class" value="1"></li>
+          `,
         );
 
-        expect(
+        expectHtmlToBeEqual(
           listItemNode.createDOM({
             namespace: '',
             theme: {},
           }).outerHTML,
-        ).toBe('<li value="1"></li>');
+          html`
+            <li value="1"></li>
+          `,
+        );
       });
     });
 
@@ -72,8 +88,11 @@ describe('LexicalListItemNode tests', () => {
 
           const domElement = listItemNode.createDOM(editorConfig);
 
-          expect(domElement.outerHTML).toBe(
-            '<li value="1" class="my-listItem-item-class"></li>',
+          expectHtmlToBeEqual(
+            domElement.outerHTML,
+            html`
+              <li class="my-listItem-item-class" value="1"></li>
+            `,
           );
           const newListItemNode = new ListItemNode();
 
@@ -85,8 +104,11 @@ describe('LexicalListItemNode tests', () => {
 
           expect(result).toBe(false);
 
-          expect(domElement.outerHTML).toBe(
-            '<li value="1" class="my-listItem-item-class"></li>',
+          expectHtmlToBeEqual(
+            domElement.outerHTML,
+            html`
+              <li class="my-listItem-item-class" value="1"></li>
+            `,
           );
         });
       });
@@ -101,8 +123,11 @@ describe('LexicalListItemNode tests', () => {
           parentListNode.append(parentlistItemNode);
           const domElement = parentlistItemNode.createDOM(editorConfig);
 
-          expect(domElement.outerHTML).toBe(
-            '<li value="1" class="my-listItem-item-class"></li>',
+          expectHtmlToBeEqual(
+            domElement.outerHTML,
+            html`
+              <li class="my-listItem-item-class" value="1"></li>
+            `,
           );
           const nestedListNode = new ListNode('bullet', 1);
           nestedListNode.append(new ListItemNode());
@@ -115,18 +140,23 @@ describe('LexicalListItemNode tests', () => {
 
           expect(result).toBe(false);
 
-          expect(domElement.outerHTML).toBe(
-            '<li value="1" class="my-listItem-item-class my-nested-list-listItem-class"></li>',
+          expectHtmlToBeEqual(
+            domElement.outerHTML,
+            html`
+              <li
+                class="my-listItem-item-class my-nested-list-listItem-class"
+                value="1"></li>
+            `,
           );
         });
       });
     });
 
     describe('ListItemNode.replace()', () => {
-      let listNode;
-      let listItemNode1;
-      let listItemNode2;
-      let listItemNode3;
+      let listNode: ListNode;
+      let listItemNode1: ListItemNode;
+      let listItemNode2: ListItemNode;
+      let listItemNode3: ListItemNode;
 
       beforeEach(async () => {
         const {editor} = testEnv;
@@ -147,8 +177,26 @@ describe('LexicalListItemNode tests', () => {
           listNode.append(listItemNode1, listItemNode2, listItemNode3);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -162,8 +210,26 @@ describe('LexicalListItemNode tests', () => {
           listItemNode1.replace(newListItemNode);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">bar</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">bar</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -174,17 +240,51 @@ describe('LexicalListItemNode tests', () => {
           return;
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
 
         await editor.update(() => {
-          const textNode = new TextNode('bar');
-          listItemNode1.replace(textNode);
+          const paragraphNode = $createParagraphNode();
+          listItemNode1.replace(paragraphNode);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><span data-lexical-text="true">bar</span><ul><li value="1" dir="ltr"><span data-lexical-text="true">two</span></li><li value="2" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <p><br /></p>
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -192,12 +292,28 @@ describe('LexicalListItemNode tests', () => {
         const {editor} = testEnv;
 
         await editor.update(() => {
-          const textNode = new TextNode('bar');
-          listItemNode3.replace(textNode);
+          const paragraphNode = $createParagraphNode();
+          listItemNode3.replace(paragraphNode);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li></ul><span data-lexical-text="true">bar</span></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+              </ul>
+              <p><br /></p>
+            </div>
+          `,
         );
       });
 
@@ -205,12 +321,30 @@ describe('LexicalListItemNode tests', () => {
         const {editor} = testEnv;
 
         await editor.update(() => {
-          const textNode = new TextNode('bar');
-          listItemNode2.replace(textNode);
+          const paragraphNode = $createParagraphNode();
+          listItemNode2.replace(paragraphNode);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li></ul><span data-lexical-text="true">bar</span><ul><li value="1" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+              </ul>
+              <p><br /></p>
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -222,26 +356,712 @@ describe('LexicalListItemNode tests', () => {
           listItemNode3.remove();
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
 
         await editor.update(() => {
-          const textNode = new TextNode('bar');
-          listItemNode1.replace(textNode);
+          const paragraphNode = $createParagraphNode();
+          listItemNode1.replace(paragraphNode);
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><span data-lexical-text="true">bar</span></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <p><br /></p>
+            </div>
+          `,
+        );
+      });
+    });
+
+    describe('ListItemNode.remove()', () => {
+      // - A
+      // - x
+      // - B
+      test('siblings are not nested', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          A_listItem.append(new TextNode('A'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          B_listItem.append(new TextNode('B'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">A</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">B</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">A</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">B</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      //   - A
+      // - x
+      // - B
+      test('the previous sibling is nested', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          const A_nestedList = new ListNode('bullet', 1);
+          const A_nestedListItem = new ListItemNode();
+          A_listItem.append(A_nestedList);
+          A_nestedList.append(A_nestedListItem);
+          A_nestedListItem.append(new TextNode('A'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          B_listItem.append(new TextNode('B'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">B</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">B</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      // - A
+      // - x
+      //   - B
+      test('the next sibling is nested', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          A_listItem.append(new TextNode('A'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          const B_nestedList = new ListNode('bullet', 1);
+          const B_nestedListItem = new ListItemNode();
+          B_listItem.append(B_nestedList);
+          B_nestedList.append(B_nestedListItem);
+          B_nestedListItem.append(new TextNode('B'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">A</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li value="3">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">A</span>
+                </li>
+                <li value="2">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      //   - A
+      // - x
+      //   - B
+      test('both siblings are nested', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          const A_nestedList = new ListNode('bullet', 1);
+          const A_nestedListItem = new ListItemNode();
+          A_listItem.append(A_nestedList);
+          A_nestedList.append(A_nestedListItem);
+          A_nestedListItem.append(new TextNode('A'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          const B_nestedList = new ListNode('bullet', 1);
+          const B_nestedListItem = new ListItemNode();
+          B_listItem.append(B_nestedList);
+          B_nestedList.append(B_nestedListItem);
+          B_nestedListItem.append(new TextNode('B'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li value="2">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                    <li dir="ltr" value="2">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      //  - A1
+      //     - A2
+      // - x
+      //   - B
+      test('the previous sibling is nested deeper than the next sibling', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          const A_nestedList = new ListNode('bullet', 1);
+          const A_nestedListItem1 = new ListItemNode();
+          const A_nestedListItem2 = new ListItemNode();
+          const A_deeplyNestedList = new ListNode('bullet', 1);
+          const A_deeplyNestedListItem = new ListItemNode();
+          A_listItem.append(A_nestedList);
+          A_nestedList.append(A_nestedListItem1);
+          A_nestedList.append(A_nestedListItem2);
+          A_nestedListItem1.append(new TextNode('A1'));
+          A_nestedListItem2.append(A_deeplyNestedList);
+          A_deeplyNestedList.append(A_deeplyNestedListItem);
+          A_deeplyNestedListItem.append(new TextNode('A2'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          const B_nestedList = new ListNode('bullet', 1);
+          const B_nestedlistItem = new ListItemNode();
+          B_listItem.append(B_nestedList);
+          B_nestedList.append(B_nestedlistItem);
+          B_nestedlistItem.append(new TextNode('B'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A1</span>
+                    </li>
+                    <li value="2">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">A2</span>
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li value="2">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A1</span>
+                    </li>
+                    <li value="2">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">A2</span>
+                        </li>
+                      </ul>
+                    </li>
+                    <li dir="ltr" value="2">
+                      <span data-lexical-text="true">B</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      //   - A
+      // - x
+      //     - B1
+      //   - B2
+      test('the next sibling is nested deeper than the previous sibling', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          const A_nestedList = new ListNode('bullet', 1);
+          const A_nestedListItem = new ListItemNode();
+          A_listItem.append(A_nestedList);
+          A_nestedList.append(A_nestedListItem);
+          A_nestedListItem.append(new TextNode('A'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          const B_nestedList = new ListNode('bullet', 1);
+          const B_nestedListItem1 = new ListItemNode();
+          const B_nestedListItem2 = new ListItemNode();
+          const B_deeplyNestedList = new ListNode('bullet', 1);
+          const B_deeplyNestedListItem = new ListItemNode();
+          B_listItem.append(B_nestedList);
+          B_nestedList.append(B_nestedListItem1);
+          B_nestedList.append(B_nestedListItem2);
+          B_nestedListItem1.append(B_deeplyNestedList);
+          B_nestedListItem2.append(new TextNode('B2'));
+          B_deeplyNestedList.append(B_deeplyNestedListItem);
+          B_deeplyNestedListItem.append(new TextNode('B1'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li value="2">
+                  <ul>
+                    <li value="1">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">B1</span>
+                        </li>
+                      </ul>
+                    </li>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B2</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A</span>
+                    </li>
+                    <li value="2">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">B1</span>
+                        </li>
+                      </ul>
+                    </li>
+                    <li dir="ltr" value="2">
+                      <span data-lexical-text="true">B2</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      //   - A1
+      //     - A2
+      // - x
+      //     - B1
+      //   - B2
+      test('both siblings are deeply nested', async () => {
+        const {editor} = testEnv;
+        let x: ListItemNode;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          const parent = new ListNode('bullet', 1);
+
+          const A_listItem = new ListItemNode();
+          const A_nestedList = new ListNode('bullet', 1);
+          const A_nestedListItem1 = new ListItemNode();
+          const A_nestedListItem2 = new ListItemNode();
+          const A_deeplyNestedList = new ListNode('bullet', 1);
+          const A_deeplyNestedListItem = new ListItemNode();
+          A_listItem.append(A_nestedList);
+          A_nestedList.append(A_nestedListItem1);
+          A_nestedList.append(A_nestedListItem2);
+          A_nestedListItem1.append(new TextNode('A1'));
+          A_nestedListItem2.append(A_deeplyNestedList);
+          A_deeplyNestedList.append(A_deeplyNestedListItem);
+          A_deeplyNestedListItem.append(new TextNode('A2'));
+
+          x = new ListItemNode();
+          x.append(new TextNode('x'));
+
+          const B_listItem = new ListItemNode();
+          const B_nestedList = new ListNode('bullet', 1);
+          const B_nestedListItem1 = new ListItemNode();
+          const B_nestedListItem2 = new ListItemNode();
+          const B_deeplyNestedList = new ListNode('bullet', 1);
+          const B_deeplyNestedListItem = new ListItemNode();
+          B_listItem.append(B_nestedList);
+          B_nestedList.append(B_nestedListItem1);
+          B_nestedList.append(B_nestedListItem2);
+          B_nestedListItem1.append(B_deeplyNestedList);
+          B_nestedListItem2.append(new TextNode('B2'));
+          B_deeplyNestedList.append(B_deeplyNestedListItem);
+          B_deeplyNestedListItem.append(new TextNode('B1'));
+
+          parent.append(A_listItem, x, B_listItem);
+          root.append(parent);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A1</span>
+                    </li>
+                    <li value="2">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">A2</span>
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">x</span>
+                </li>
+                <li value="2">
+                  <ul>
+                    <li value="1">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">B1</span>
+                        </li>
+                      </ul>
+                    </li>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">B2</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+
+        await editor.update(() => x.remove());
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li value="1">
+                  <ul>
+                    <li dir="ltr" value="1">
+                      <span data-lexical-text="true">A1</span>
+                    </li>
+                    <li value="2">
+                      <ul>
+                        <li dir="ltr" value="1">
+                          <span data-lexical-text="true">A2</span>
+                        </li>
+                        <li dir="ltr" value="2">
+                          <span data-lexical-text="true">B1</span>
+                        </li>
+                      </ul>
+                    </li>
+                    <li dir="ltr" value="2">
+                      <span data-lexical-text="true">B2</span>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
     });
 
     describe('ListItemNode.insertNewAfter(): non-empty list items', () => {
-      let listNode;
-      let listItemNode1;
-      let listItemNode2;
-      let listItemNode3;
+      let listNode: ListNode;
+      let listItemNode1: ListItemNode;
+      let listItemNode2: ListItemNode;
+      let listItemNode3: ListItemNode;
 
       beforeEach(async () => {
         const {editor} = testEnv;
@@ -262,8 +1082,26 @@ describe('LexicalListItemNode tests', () => {
           listItemNode3.append(new TextNode('three'));
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -271,11 +1109,30 @@ describe('LexicalListItemNode tests', () => {
         const {editor} = testEnv;
 
         await editor.update(() => {
-          listItemNode1.insertNewAfter();
+          listItemNode1.insertNewAfter($createRangeSelection());
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2"><br></li><li value="3" dir="ltr"><span data-lexical-text="true">two</span></li><li value="4" dir="ltr"><span data-lexical-text="true">three</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li value="2"><br /></li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="4">
+                  <span data-lexical-text="true">three</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -283,11 +1140,30 @@ describe('LexicalListItemNode tests', () => {
         const {editor} = testEnv;
 
         await editor.update(() => {
-          listItemNode3.insertNewAfter();
+          listItemNode3.insertNewAfter($createRangeSelection());
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li><li value="4"><br></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+                <li value="4"><br /></li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -295,11 +1171,30 @@ describe('LexicalListItemNode tests', () => {
         const {editor} = testEnv;
 
         await editor.update(() => {
-          listItemNode3.insertNewAfter();
+          listItemNode3.insertNewAfter($createRangeSelection());
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li><li value="3" dir="ltr"><span data-lexical-text="true">three</span></li><li value="4"><br></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li dir="ltr" value="2">
+                  <span data-lexical-text="true">two</span>
+                </li>
+                <li dir="ltr" value="3">
+                  <span data-lexical-text="true">three</span>
+                </li>
+                <li value="4"><br /></li>
+              </ul>
+            </div>
+          `,
         );
       });
 
@@ -311,16 +1206,41 @@ describe('LexicalListItemNode tests', () => {
           listItemNode3.remove();
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
 
         await editor.update(() => {
-          listItemNode1.insertNewAfter();
+          listItemNode1.insertNewAfter($createRangeSelection());
         });
 
-        expect(testEnv.outerHTML).toBe(
-          '<div contenteditable="true" style="user-select: text; white-space: pre-wrap; word-break: break-word;" data-lexical-editor="true"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2"><br></li></ul></div>',
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul>
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">one</span>
+                </li>
+                <li value="2"><br /></li>
+              </ul>
+            </div>
+          `,
         );
       });
     });
@@ -350,9 +1270,9 @@ describe('LexicalListItemNode tests', () => {
     });
 
     describe('ListItemNode.setIndent()', () => {
-      let listNode;
-      let listItemNode1;
-      let listItemNode2;
+      let listNode: ListNode;
+      let listItemNode1: ListItemNode;
+      let listItemNode2: ListItemNode;
 
       beforeEach(async () => {
         const {editor} = testEnv;
@@ -381,8 +1301,30 @@ describe('LexicalListItemNode tests', () => {
           expect(listItemNode1.getIndent()).toBe(3);
         });
 
-        expect(editor.getRootElement().innerHTML).toBe(
-          '<ul><li value="1"><ul><li value="1"><ul><li value="1"><ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li></ul></li></ul></li></ul></li><li value="1" dir="ltr"><span data-lexical-text="true">two</span></li></ul>',
+        expectHtmlToBeEqual(
+          editor.getRootElement()!.innerHTML,
+          html`
+            <ul>
+              <li value="1">
+                <ul>
+                  <li value="1">
+                    <ul>
+                      <li value="1">
+                        <ul>
+                          <li dir="ltr" value="1">
+                            <span data-lexical-text="true">one</span>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+              <li dir="ltr" value="1">
+                <span data-lexical-text="true">two</span>
+              </li>
+            </ul>
+          `,
         );
 
         await editor.update(() => {
@@ -393,8 +1335,182 @@ describe('LexicalListItemNode tests', () => {
           expect(listItemNode1.getIndent()).toBe(0);
         });
 
-        expect(editor.getRootElement().innerHTML).toBe(
-          '<ul><li value="1" dir="ltr"><span data-lexical-text="true">one</span></li><li value="2" dir="ltr"><span data-lexical-text="true">two</span></li></ul>',
+        expectHtmlToBeEqual(
+          editor.getRootElement()!.innerHTML,
+          html`
+            <ul>
+              <li dir="ltr" value="1">
+                <span data-lexical-text="true">one</span>
+              </li>
+              <li dir="ltr" value="2">
+                <span data-lexical-text="true">two</span>
+              </li>
+            </ul>
+          `,
+        );
+      });
+
+      it('handles fractional indent values', async () => {
+        const {editor} = testEnv;
+
+        await editor.update(() => {
+          listItemNode1.setIndent(0.5);
+        });
+
+        await editor.update(() => {
+          expect(listItemNode1.getIndent()).toBe(0);
+        });
+      });
+    });
+
+    test('Can serialize a node that is not attached', async () => {
+      const {editor} = testEnv;
+      await editor.update(() => {
+        const listItemNode = $createListItemNode();
+        const listNode = $createListNode();
+        listNode.append(listItemNode);
+        expect(listItemNode.exportJSON()).toEqual({
+          checked: undefined,
+          children: [],
+          direction: null,
+          format: '',
+          indent: 0,
+          type: 'listitem',
+          value: 1,
+          version: 1,
+        });
+      });
+    });
+
+    describe('ListItemNode RTL behavior', () => {
+      let listNode: ListNode;
+      let listItemNode1: ListItemNode;
+      let listItemNode2: ListItemNode;
+
+      beforeEach(async () => {
+        const {editor} = testEnv;
+
+        await editor.update(() => {
+          const root = $getRoot();
+          listNode = new ListNode('bullet', 1);
+          listItemNode1 = new ListItemNode();
+          listItemNode2 = new ListItemNode();
+
+          root.append(listNode);
+          listNode.append(listItemNode1, listItemNode2);
+
+          // Add Arabic text to test RTL
+          listItemNode1.append(new TextNode('مرحبا'));
+          listItemNode2.append(new TextNode('العالم'));
+        });
+      });
+
+      test('list items with RTL content have correct direction in editor', async () => {
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              dir="rtl"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul dir="rtl">
+                <li dir="rtl" value="1">
+                  <span data-lexical-text="true">مرحبا</span>
+                </li>
+                <li dir="rtl" value="2">
+                  <span data-lexical-text="true">العالم</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      test('list items preserve RTL direction in exported HTML', async () => {
+        const {editor} = testEnv;
+
+        await editor.update(() => {
+          const exportedHTML = listItemNode1.exportDOM(editor);
+          const element = exportedHTML.element as HTMLElement;
+
+          expect(element.dir).toBe('rtl');
+          expect(element.tagName.toLowerCase()).toBe('li');
+        });
+
+        await editor.update(() => {
+          const exportedHTML = listItemNode2.exportDOM(editor);
+          const element = exportedHTML.element as HTMLElement;
+
+          expect(element.dir).toBe('rtl');
+          expect(element.tagName.toLowerCase()).toBe('li');
+        });
+      });
+
+      test('list items handle mixed LTR and RTL content', async () => {
+        const {editor} = testEnv;
+
+        await editor.update(() => {
+          // Add mixed direction content
+          listItemNode1.clear();
+          listItemNode1.append(new TextNode('Hello مرحبا'));
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              dir="rtl"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul dir="rtl">
+                <li dir="ltr" value="1">
+                  <span data-lexical-text="true">Hello مرحبا</span>
+                </li>
+                <li dir="rtl" value="2">
+                  <span data-lexical-text="true">العالم</span>
+                </li>
+              </ul>
+            </div>
+          `,
+        );
+      });
+
+      test('nested list items preserve RTL direction', async () => {
+        const {editor} = testEnv;
+
+        await editor.update(() => {
+          const nestedList = new ListNode('bullet', 1);
+          const nestedItem = new ListItemNode();
+          nestedItem.append(new TextNode('فرعي')); // "Sub" in Arabic
+          nestedList.append(nestedItem);
+          listItemNode1.append(nestedList);
+        });
+
+        expectHtmlToBeEqual(
+          testEnv.outerHTML,
+          html`
+            <div
+              contenteditable="true"
+              dir="rtl"
+              style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+              data-lexical-editor="true">
+              <ul dir="rtl">
+                <li dir="rtl" value="1">
+                  <span data-lexical-text="true">مرحبا</span>
+                  <ul dir="rtl">
+                    <li dir="rtl" value="1">
+                      <span data-lexical-text="true">فرعي</span>
+                    </li>
+                  </ul>
+                </li>
+                <li dir="rtl" value="2">
+                  <span data-lexical-text="true">العالم</span>
+                </li>
+              </ul>
+            </div>
+          `,
         );
       });
     });

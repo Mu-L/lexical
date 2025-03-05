@@ -1,10 +1,8 @@
----
-sidebar_position: 3
----
+
 
 # Listeners
 
-Listeners are a mechanism that lets the Editor instance inform the user when a certain operation has occured. All listeners follow a reactive pattern where you can do an operation upon something happening in the future. All listeners also return a function that easily allows for the
+Listeners are a mechanism that lets the Editor instance inform the user when a certain operation has occurred. All listeners follow a reactive pattern where you can do an operation upon something happening in the future. All listeners also return a function that easily allows for the
 listener to be unregistered. Below are the different listeners that Lexical supports today:
 
 ## `registerUpdateListener`
@@ -33,7 +31,7 @@ The update listener callbacks receives a single argument containing the follow p
 - `tags` a Set of all tags that were passed to the update
 
 One thing to be aware of is "waterfall" updates. This is where you might schedule an update inside an update
-listener, as show below:
+listener, as shown below:
 
 ```js
 editor.registerUpdateListener(({editorState}) => {
@@ -50,7 +48,7 @@ editor.registerUpdateListener(({editorState}) => {
 ```
 
 The problem with this pattern is that it means we end up doing two DOM updates, when we likely could have
-done it in a single DOM update. This can have an impact on performance, which is important in text editor.
+done it in a single DOM update. This can have an impact on performance, which is important in a text editor.
 To avoid this, we recommend looking into [Node Transforms](https://lexical.dev/docs/concepts/transforms), which allow you to listen to node changes and
 transform them as part of the same given update, meaning no waterfalls!
 
@@ -83,15 +81,21 @@ Get notified when a specific type of Lexical node has been mutated. There are th
 Mutation listeners are great for tracking the lifecycle of specific types of node. They can be used to
 handle external UI state and UI features relating to specific types of node.
 
+If any existing nodes are in the DOM, and skipInitialization is not true, the listener
+will be called immediately with an updateTag of 'registerMutationListener' where all
+nodes have the 'created' NodeMutation. This can be controlled with the skipInitialization option
+(whose default was previously true for backwards compatibility with &lt;=0.16.1 but has been changed to false as of 0.21.0).
+
 ```js
 const removeMutationListener = editor.registerMutationListener(
   MyCustomNode,
-  (mutatedNodes) => {
+  (mutatedNodes, { updateTags, dirtyLeaves, prevEditorState }) => {
     // mutatedNodes is a Map where each key is the NodeKey, and the value is the state of mutation.
     for (let [nodeKey, mutation] of mutatedNodes) {
       console.log(nodeKey, mutation)
     }
   },
+  {skipInitialization: false}
 );
 
 // Do not forget to unregister the listener when no longer needed!
@@ -117,9 +121,9 @@ removeEditableListener();
 
 ## `registerDecoratorListener`
 
-Get notified when a the editor's decorator object changes. The decorator object contains
+Get notified when the editor's decorator object changes. The decorator object contains
 all `DecoratorNode` keys -> their decorated value. This is primarily used with external
-UI frameworks. 
+UI frameworks.
 
 ```js
 const removeDecoratorListener = editor.registerDecoratorListener(
@@ -131,4 +135,21 @@ const removeDecoratorListener = editor.registerDecoratorListener(
 
 // Do not forget to unregister the listener when no longer needed!
 removeDecoratorListener();
+```
+
+## `registerRootListener`
+
+Get notified when the editor's root DOM element (the content editable Lexical attaches to) changes. This is primarily used to
+attach event listeners to the root element. *The root listener function is executed directly upon registration and then on any subsequent update.*
+
+```js
+const removeRootListener = editor.registerRootListener(
+  (rootElement, prevRootElement) => {
+   //add listeners to the new root element
+   //remove listeners from the old root element
+  },
+);
+
+// Do not forget to unregister the listener when no longer needed!
+removeRootListener();
 ```

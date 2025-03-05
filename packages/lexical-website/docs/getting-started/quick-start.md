@@ -10,7 +10,7 @@ it's advisable to [check out the Getting Started with React page](https://lexica
 ### Creating an editor and using it
 
 When you work with Lexical, you normally work with a single editor instance. An editor instance can be thought of as the one responsible
-for wiring up an EditorState with the DOM. The editor is also the place where you can register custom nodes, add listeners, and transforms.
+for wiring up an `EditorState` with the DOM. The editor is also the place where you can register custom nodes, add listeners, and transforms.
 
 An editor instance can be created from the `lexical` package and accepts an optional configuration object that allows for theming and other options:
 
@@ -54,7 +54,9 @@ const stringifiedEditorState = JSON.stringify(editor.getEditorState().toJSON());
 const newEditorState = editor.parseEditorState(stringifiedEditorState);
 ```
 
-### Updating an editor
+### Updating an editor state
+
+While it's not necessarily needed if using `@lexical/rich-text` or `@lexical/plain-text` helper packages, it's still relevant for programmatic content modification as well as in case of the custom editor fine tuning.
 
 There are a few ways to update an editor instance:
 
@@ -105,7 +107,7 @@ editor.update(() => {
   root.append(paragraphNode);
 });
 ```
-**It's important to note that the core library (the 'lexical' package) does not listen for any commands or perform any updates to the editor state in response to user events out-of-the-box.** In order to see text and other content appear in the editor, you need to register [command listeners](https://lexical.dev/docs/concepts/commands#editorregistercommand) and update the editor in the callback. Lexical provides a couple of helper packages to make it easy wire up a lot of the basic commands you might want for [plain text](https://lexical.dev/docs/packages/lexical-plain-text) or [rich text](https://lexical.dev/docs/packages/lexical-rich-text) experiences.
+**It's important to note that the core library (the 'lexical' package) does not listen for any commands or perform any updates to the editor state in response to user events out-of-the-box.** In order to see text and other content appear in the editor, you need to register [command listeners](https://lexical.dev/docs/concepts/commands#editorregistercommand) and update the editor in the callback. Lexical provides a couple of helper packages to make it easy to wire up a lot of the basic commands you might want for [plain text](https://lexical.dev/docs/packages/lexical-plain-text) or [rich text](https://lexical.dev/docs/packages/lexical-rich-text) experiences.
 
 If you want to know when the editor updates so you can react to the changes, you can add an update
 listener to the editor, as shown below:
@@ -121,3 +123,9 @@ editor.registerUpdateListener(({editorState}) => {
   });
 });
 ```
+
+### Putting it together
+
+Here we have simplest Lexical setup in rich text configuration (`@lexical/rich-text`) with history (`@lexical/history`) and accessibility (`@lexical/dragon`) features enabled.
+
+<iframe width="100%" height="400" src="https://stackblitz.com/github/facebook/lexical/tree/main/examples/vanilla-js?embed=1&file=src%2Fmain.ts&terminalHeight=0&ctl=1" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts"></iframe>

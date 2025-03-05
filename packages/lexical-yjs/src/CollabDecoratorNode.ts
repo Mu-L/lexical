@@ -14,21 +14,19 @@ import type {XmlElement} from 'yjs';
 import {$getNodeByKey, $isDecoratorNode} from 'lexical';
 import invariant from 'shared/invariant';
 
-import {syncPropertiesFromLexical, syncPropertiesFromYjs} from './Utils';
+import {$syncPropertiesFromYjs, syncPropertiesFromLexical} from './Utils';
 
 export class CollabDecoratorNode {
   _xmlElem: XmlElement;
   _key: NodeKey;
   _parent: CollabElementNode;
   _type: string;
-  _unobservers: Set<() => void>;
 
   constructor(xmlElem: XmlElement, parent: CollabElementNode, type: string) {
     this._key = '';
     this._xmlElem = xmlElem;
     this._parent = parent;
     this._type = type;
-    this._unobservers = new Set();
   }
 
   getPrevNode(nodeMap: null | NodeMap): null | DecoratorNode<unknown> {
@@ -89,17 +87,17 @@ export class CollabDecoratorNode {
     const lexicalNode = this.getNode();
     invariant(
       lexicalNode !== null,
-      'syncPropertiesFromYjs: cound not find decorator node',
+      'syncPropertiesFromYjs: could not find decorator node',
     );
     const xmlElem = this._xmlElem;
-    syncPropertiesFromYjs(binding, xmlElem, lexicalNode, keysChanged);
+    $syncPropertiesFromYjs(binding, xmlElem, lexicalNode, keysChanged);
   }
 
   destroy(binding: Binding): void {
     const collabNodeMap = binding.collabNodeMap;
-    collabNodeMap.delete(this._key);
-    this._unobservers.forEach((unobserver) => unobserver());
-    this._unobservers.clear();
+    if (collabNodeMap.get(this._key) === this) {
+      collabNodeMap.delete(this._key);
+    }
   }
 }
 
@@ -109,7 +107,6 @@ export function $createCollabDecoratorNode(
   type: string,
 ): CollabDecoratorNode {
   const collabNode = new CollabDecoratorNode(xmlElem, parent, type);
-  // @ts-expect-error: internal field
   xmlElem._collabNode = collabNode;
   return collabNode;
 }

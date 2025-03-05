@@ -7,18 +7,12 @@
  * @flow strict
  */
 
-import type {
-  EditorState,
-  GridSelection,
-  LexicalEditor,
-  NodeSelection,
-  RangeSelection,
-} from 'lexical';
+import type {BaseSelection, EditorState, LexicalEditor} from 'lexical';
 
 export type HistoryStateEntry = {
   editor: LexicalEditor,
   editorState: EditorState,
-  undoSelection?: RangeSelection | NodeSelection | GridSelection | null,
+  undoSelection?: BaseSelection | null,
 };
 
 export type HistoryState = {
@@ -29,6 +23,6 @@ export type HistoryState = {
 
 declare export function HistoryPlugin({
   externalHistoryState?: HistoryState,
-}): React$Node;
+}): React.Node;
 
 declare export function createEmptyHistoryState(): HistoryState;

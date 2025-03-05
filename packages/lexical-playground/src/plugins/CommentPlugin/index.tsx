@@ -6,12 +6,15 @@
  *
  */
 
+import type {Provider} from '@lexical/yjs';
 import type {
   EditorState,
   LexicalCommand,
   LexicalEditor,
   NodeKey,
+  RangeSelection,
 } from 'lexical';
+import type {JSX} from 'react';
 import type {Doc} from 'yjs';
 
 import './index.css';
@@ -29,7 +32,8 @@ import {ClearEditorPlugin} from '@lexical/react/LexicalClearEditorPlugin';
 import {useCollaborationContext} from '@lexical/react/LexicalCollaborationContext';
 import {LexicalComposer} from '@lexical/react/LexicalComposer';
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import LexicalErrorBoundary from '@lexical/react/LexicalErrorBoundary';
+import {EditorRefPlugin} from '@lexical/react/LexicalEditorRefPlugin';
+import {LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
 import {HistoryPlugin} from '@lexical/react/LexicalHistoryPlugin';
 import {OnChangePlugin} from '@lexical/react/LexicalOnChangePlugin';
 import {PlainTextPlugin} from '@lexical/react/LexicalPlainTextPlugin';
@@ -44,13 +48,13 @@ import {
   CLEAR_EDITOR_COMMAND,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
+  getDOMSelection,
   KEY_ESCAPE_COMMAND,
 } from 'lexical';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import * as React from 'react';
 import {createPortal} from 'react-dom';
 import useLayoutEffect from 'shared/useLayoutEffect';
-import {WebsocketProvider} from 'y-websocket';
 
 import {
   Comment,
@@ -65,7 +69,6 @@ import useModal from '../../hooks/useModal';
 import CommentEditorTheme from '../../themes/CommentEditorTheme';
 import Button from '../../ui/Button';
 import ContentEditable from '../../ui/ContentEditable';
-import Placeholder from '../../ui/Placeholder';
 
 export const INSERT_INLINE_COMMAND: LexicalCommand<void> = createCommand(
   'INSERT_INLINE_COMMAND',
@@ -118,23 +121,6 @@ function AddCommentBox({
   );
 }
 
-function EditorRefPlugin({
-  editorRef,
-}: {
-  editorRef: {current: null | LexicalEditor};
-}): null {
-  const [editor] = useLexicalComposerContext();
-
-  useLayoutEffect(() => {
-    editorRef.current = editor;
-    return () => {
-      editorRef.current = null;
-    };
-  }, [editor, editorRef]);
-
-  return null;
-}
-
 function EscapeHandlerPlugin({
   onEscape,
 }: {
@@ -183,8 +169,9 @@ function PlainTextEditor({
     <LexicalComposer initialConfig={initialConfig}>
       <div className="CommentPlugin_CommentInputBox_EditorContainer">
         <PlainTextPlugin
-          contentEditable={<ContentEditable className={className} />}
-          placeholder={<Placeholder>{placeholder}</Placeholder>}
+          contentEditable={
+            <ContentEditable placeholder={placeholder} className={className} />
+          }
           ErrorBoundary={LexicalErrorBoundary}
         />
         <OnChangePlugin onChange={onChange} />
@@ -223,6 +210,8 @@ function CommentInputBox({
   submitAddComment: (
     commentOrThread: Comment | Thread,
     isInlineComment: boolean,
+    thread?: Thread,
+    selection?: RangeSelection | null,
   ) => void;
 }) {
   const [content, setContent] = useState('');
@@ -235,6 +224,7 @@ function CommentInputBox({
     }),
     [],
   );
+  const selectionRef = useRef<RangeSelection | null>(null);
   const author = useCollabAuthorName();
 
   const updateLocation = useCallback(() => {
@@ -242,6 +232,7 @@ function CommentInputBox({
       const selection = $getSelection();
 
       if ($isRangeSelection(selection)) {
+        selectionRef.current = selection.clone();
         const anchor = selection.anchor;
         const focus = selection.focus;
         const range = createDOMRange(
@@ -261,7 +252,11 @@ function CommentInputBox({
             correctedLeft = 10;
           }
           boxElem.style.left = `${correctedLeft}px`;
-          boxElem.style.top = `${bottom + 20}px`;
+          boxElem.style.top = `${
+            bottom +
+            20 +
+            (window.pageYOffset || document.documentElement.scrollTop)
+          }px`;
           const selectionRectsLength = selectionRects.length;
           const {container} = selectionState;
           const elements: Array<HTMLSpanElement> = selectionState.elements;
@@ -276,7 +271,14 @@ function CommentInputBox({
               container.appendChild(elem);
             }
             const color = '255, 212, 0';
-            const style = `position:absolute;top:${selectionRect.top}px;left:${selectionRect.left}px;height:${selectionRect.height}px;width:${selectionRect.width}px;background-color:rgba(${color}, 0.3);pointer-events:none;z-index:5;`;
+            const style = `position:absolute;top:${
+              selectionRect.top +
+              (window.pageYOffset || document.documentElement.scrollTop)
+            }px;left:${selectionRect.left}px;height:${
+              selectionRect.height
+            }px;width:${
+              selectionRect.width
+            }px;background-color:rgba(${color}, 0.3);pointer-events:none;z-index:5;`;
             elem.style.cssText = style;
           }
           for (let i = elementsLength - 1; i >= selectionRectsLength; i--) {
@@ -318,8 +320,8 @@ function CommentInputBox({
   const submitComment = () => {
     if (canSubmit) {
       let quote = editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        return selection !== null ? selection.getTextContent() : '';
+        const selection = selectionRef.current;
+        return selection ? selection.getTextContent() : '';
       });
       if (quote.length > 100) {
         quote = quote.slice(0, 99) + '…';
@@ -327,7 +329,10 @@ function CommentInputBox({
       submitAddComment(
         createThread(quote, [createComment(content, author)]),
         true,
+        undefined,
+        selectionRef.current,
       );
+      selectionRef.current = null;
     }
   };
 
@@ -463,7 +468,9 @@ function CommentsPanelListComment({
   rtf: Intl.RelativeTimeFormat;
   thread?: Thread;
 }): JSX.Element {
-  const seconds = Math.round((comment.timeStamp - performance.now()) / 1000);
+  const seconds = Math.round(
+    (comment.timeStamp - (performance.timeOrigin + performance.now())) / 1000,
+  );
   const minutes = Math.round(seconds / 60);
   const [modal, showModal] = useModal();
 
@@ -700,10 +707,7 @@ function useCollabAuthorName(): string {
 export default function CommentPlugin({
   providerFactory,
 }: {
-  providerFactory?: (
-    id: string,
-    yjsDocMap: Map<string, Doc>,
-  ) => WebsocketProvider;
+  providerFactory?: (id: string, yjsDocMap: Map<string, Doc>) => Provider;
 }): JSX.Element {
   const collabContext = useCollaborationContext();
   const [editor] = useLexicalComposerContext();
@@ -743,7 +747,9 @@ export default function CommentPlugin({
           comment,
           thread,
         );
-        if (!deletionInfo) return;
+        if (!deletionInfo) {
+          return;
+        }
         const {markedComment, index} = deletionInfo;
         commentStore.addComment(markedComment, thread, index);
       } else {
@@ -777,26 +783,17 @@ export default function CommentPlugin({
       commentOrThread: Comment | Thread,
       isInlineComment: boolean,
       thread?: Thread,
+      selection?: RangeSelection | null,
     ) => {
       commentStore.addComment(commentOrThread, thread);
       if (isInlineComment) {
         editor.update(() => {
-          const selection = $getSelection();
           if ($isRangeSelection(selection)) {
-            const focus = selection.focus;
-            const anchor = selection.anchor;
             const isBackward = selection.isBackward();
             const id = commentOrThread.id;
 
             // Wrap content in a MarkNode
             $wrapSelectionInMarkNode(selection, isBackward, id);
-
-            // Make selection collapsed at the end
-            if (isBackward) {
-              focus.set(anchor.key, anchor.offset, anchor.type);
-            } else {
-              anchor.set(focus.key, focus.offset, focus.type);
-            }
           }
         });
         setShowCommentInput(false);
@@ -847,43 +844,47 @@ export default function CommentPlugin({
           });
         },
       ),
-      editor.registerMutationListener(MarkNode, (mutations) => {
-        editor.getEditorState().read(() => {
-          for (const [key, mutation] of mutations) {
-            const node: null | MarkNode = $getNodeByKey(key);
-            let ids: NodeKey[] = [];
-
-            if (mutation === 'destroyed') {
-              ids = markNodeKeysToIDs.get(key) || [];
-            } else if ($isMarkNode(node)) {
-              ids = node.getIDs();
-            }
-
-            for (let i = 0; i < ids.length; i++) {
-              const id = ids[i];
-              let markNodeKeys = markNodeMap.get(id);
-              markNodeKeysToIDs.set(key, ids);
+      editor.registerMutationListener(
+        MarkNode,
+        (mutations) => {
+          editor.getEditorState().read(() => {
+            for (const [key, mutation] of mutations) {
+              const node: null | MarkNode = $getNodeByKey(key);
+              let ids: NodeKey[] = [];
 
               if (mutation === 'destroyed') {
-                if (markNodeKeys !== undefined) {
-                  markNodeKeys.delete(key);
-                  if (markNodeKeys.size === 0) {
-                    markNodeMap.delete(id);
+                ids = markNodeKeysToIDs.get(key) || [];
+              } else if ($isMarkNode(node)) {
+                ids = node.getIDs();
+              }
+
+              for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+                let markNodeKeys = markNodeMap.get(id);
+                markNodeKeysToIDs.set(key, ids);
+
+                if (mutation === 'destroyed') {
+                  if (markNodeKeys !== undefined) {
+                    markNodeKeys.delete(key);
+                    if (markNodeKeys.size === 0) {
+                      markNodeMap.delete(id);
+                    }
                   }
-                }
-              } else {
-                if (markNodeKeys === undefined) {
-                  markNodeKeys = new Set();
-                  markNodeMap.set(id, markNodeKeys);
-                }
-                if (!markNodeKeys.has(key)) {
-                  markNodeKeys.add(key);
+                } else {
+                  if (markNodeKeys === undefined) {
+                    markNodeKeys = new Set();
+                    markNodeMap.set(id, markNodeKeys);
+                  }
+                  if (!markNodeKeys.has(key)) {
+                    markNodeKeys.add(key);
+                  }
                 }
               }
             }
-          }
-        });
-      }),
+          });
+        },
+        {skipInitialization: false},
+      ),
       editor.registerUpdateListener(({editorState, tags}) => {
         editorState.read(() => {
           const selection = $getSelection();
@@ -916,15 +917,15 @@ export default function CommentPlugin({
           if (!hasAnchorKey) {
             setActiveAnchorKey(null);
           }
+          if (!tags.has('collaboration') && $isRangeSelection(selection)) {
+            setShowCommentInput(false);
+          }
         });
-        if (!tags.has('collaboration')) {
-          setShowCommentInput(false);
-        }
       }),
       editor.registerCommand(
         INSERT_INLINE_COMMAND,
         () => {
-          const domSelection = window.getSelection();
+          const domSelection = getDOMSelection(editor._window);
           if (domSelection !== null) {
             domSelection.removeAllRanges();
           }

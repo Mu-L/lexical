@@ -7,10 +7,7 @@
  */
 
 import type {ElementNode} from '.';
-import type {
-  IntentionallyMarkedAsDirtyElement,
-  LexicalEditor,
-} from './LexicalEditor';
+import type {LexicalEditor} from './LexicalEditor';
 import type {EditorState} from './LexicalEditorState';
 import type {NodeKey, NodeMap} from './LexicalNode';
 
@@ -38,27 +35,29 @@ export function $garbageCollectDetachedDecorators(
   }
 }
 
+type IntentionallyMarkedAsDirtyElement = boolean;
+
 function $garbageCollectDetachedDeepChildNodes(
   node: ElementNode,
   parentKey: NodeKey,
   prevNodeMap: NodeMap,
   nodeMap: NodeMap,
+  nodeMapDelete: Array<NodeKey>,
   dirtyNodes: Map<NodeKey, IntentionallyMarkedAsDirtyElement>,
 ): void {
-  const children = node.__children;
-  const childrenLength = children.length;
+  let child = node.getFirstChild();
 
-  for (let i = 0; i < childrenLength; i++) {
-    const childKey = children[i];
-    const child = nodeMap.get(childKey);
-
-    if (child !== undefined && child.__parent === parentKey) {
+  while (child !== null) {
+    const childKey = child.__key;
+    // TODO Revise condition below, redundant? LexicalNode already cleans up children when moving Nodes
+    if (child.__parent === parentKey) {
       if ($isElementNode(child)) {
         $garbageCollectDetachedDeepChildNodes(
           child,
           childKey,
           prevNodeMap,
           nodeMap,
+          nodeMapDelete,
           dirtyNodes,
         );
       }
@@ -68,9 +67,9 @@ function $garbageCollectDetachedDeepChildNodes(
       if (!prevNodeMap.has(childKey)) {
         dirtyNodes.delete(childKey);
       }
-
-      nodeMap.delete(childKey);
+      nodeMapDelete.push(childKey);
     }
+    child = child.getNextSibling();
   }
 }
 
@@ -82,22 +81,12 @@ export function $garbageCollectDetachedNodes(
 ): void {
   const prevNodeMap = prevEditorState._nodeMap;
   const nodeMap = editorState._nodeMap;
-
-  for (const nodeKey of dirtyLeaves) {
-    const node = nodeMap.get(nodeKey);
-
-    if (node !== undefined && !node.isAttached()) {
-      if (!prevNodeMap.has(nodeKey)) {
-        dirtyLeaves.delete(nodeKey);
-      }
-
-      nodeMap.delete(nodeKey);
-    }
-  }
+  // Store dirtyElements in a queue for later deletion; deleting dirty subtrees too early will
+  // hinder accessing .__next on child nodes
+  const nodeMapDelete: Array<NodeKey> = [];
 
   for (const [nodeKey] of dirtyElements) {
     const node = nodeMap.get(nodeKey);
-
     if (node !== undefined) {
       // Garbage collect node and its children if they exist
       if (!node.isAttached()) {
@@ -107,18 +96,30 @@ export function $garbageCollectDetachedNodes(
             nodeKey,
             prevNodeMap,
             nodeMap,
+            nodeMapDelete,
             dirtyElements,
           );
         }
-
         // If we have created a node and it was dereferenced, then also
         // remove it from out dirty nodes Set.
         if (!prevNodeMap.has(nodeKey)) {
           dirtyElements.delete(nodeKey);
         }
-
-        nodeMap.delete(nodeKey);
+        nodeMapDelete.push(nodeKey);
       }
+    }
+  }
+  for (const nodeKey of nodeMapDelete) {
+    nodeMap.delete(nodeKey);
+  }
+
+  for (const nodeKey of dirtyLeaves) {
+    const node = nodeMap.get(nodeKey);
+    if (node !== undefined && !node.isAttached()) {
+      if (!prevNodeMap.has(nodeKey)) {
+        dirtyLeaves.delete(nodeKey);
+      }
+      nodeMap.delete(nodeKey);
     }
   }
 }

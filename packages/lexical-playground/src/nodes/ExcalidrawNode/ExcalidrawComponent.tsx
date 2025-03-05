@@ -6,74 +6,75 @@
  *
  */
 
-import type {ExcalidrawElementFragment} from './ExcalidrawModal';
+import type {ExcalidrawInitialElements} from '../../ui/ExcalidrawModal';
 import type {NodeKey} from 'lexical';
+import type {JSX} from 'react';
 
+import {AppState, BinaryFiles} from '@excalidraw/excalidraw/types/types';
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
+import {useLexicalEditable} from '@lexical/react/useLexicalEditable';
 import {useLexicalNodeSelection} from '@lexical/react/useLexicalNodeSelection';
 import {mergeRegister} from '@lexical/utils';
 import {
   $getNodeByKey,
-  $getSelection,
-  $isNodeSelection,
   CLICK_COMMAND,
   COMMAND_PRIORITY_LOW,
+  isDOMNode,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
 } from 'lexical';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import * as React from 'react';
 
+import ExcalidrawModal from '../../ui/ExcalidrawModal';
 import ImageResizer from '../../ui/ImageResizer';
 import {$isExcalidrawNode} from '.';
 import ExcalidrawImage from './ExcalidrawImage';
-import ExcalidrawModal from './ExcalidrawModal';
 
 export default function ExcalidrawComponent({
   nodeKey,
   data,
+  width,
+  height,
 }: {
   data: string;
   nodeKey: NodeKey;
+  width: 'inherit' | number;
+  height: 'inherit' | number;
 }): JSX.Element {
   const [editor] = useLexicalComposerContext();
+  const isEditable = useLexicalEditable();
   const [isModalOpen, setModalOpen] = useState<boolean>(
     data === '[]' && editor.isEditable(),
   );
-  const imageContainerRef = useRef<HTMLImageElement | null>(null);
+  const imageContainerRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const captionButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isSelected, setSelected, clearSelection] =
     useLexicalNodeSelection(nodeKey);
   const [isResizing, setIsResizing] = useState<boolean>(false);
 
-  const onDelete = useCallback(
+  const $onDelete = useCallback(
     (event: KeyboardEvent) => {
-      if (isSelected && $isNodeSelection($getSelection())) {
+      if (isSelected) {
         event.preventDefault();
-        editor.update(() => {
-          const node = $getNodeByKey(nodeKey);
-          if ($isExcalidrawNode(node)) {
-            node.remove();
-          }
-          setSelected(false);
-        });
+        const node = $getNodeByKey(nodeKey);
+        if (node) {
+          node.remove();
+        }
       }
       return false;
     },
-    [editor, isSelected, nodeKey, setSelected],
+    [isSelected, nodeKey],
   );
 
-  // Set editor to readOnly if excalidraw is open to prevent unwanted changes
   useEffect(() => {
-    if (isModalOpen) {
-      editor.setEditable(false);
-    } else {
-      editor.setEditable(true);
+    if (!isEditable) {
+      if (isSelected) {
+        clearSelection();
+      }
+      return;
     }
-  }, [isModalOpen, editor]);
-
-  useEffect(() => {
     return mergeRegister(
       editor.registerCommand(
         CLICK_COMMAND,
@@ -85,7 +86,11 @@ export default function ExcalidrawComponent({
             return true;
           }
 
-          if (buttonElem !== null && buttonElem.contains(eventTarget as Node)) {
+          if (
+            buttonElem !== null &&
+            isDOMNode(eventTarget) &&
+            buttonElem.contains(eventTarget)
+          ) {
             if (!event.shiftKey) {
               clearSelection();
             }
@@ -102,36 +107,51 @@ export default function ExcalidrawComponent({
       ),
       editor.registerCommand(
         KEY_DELETE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
       editor.registerCommand(
         KEY_BACKSPACE_COMMAND,
-        onDelete,
+        $onDelete,
         COMMAND_PRIORITY_LOW,
       ),
     );
-  }, [clearSelection, editor, isSelected, isResizing, onDelete, setSelected]);
+  }, [
+    clearSelection,
+    editor,
+    isSelected,
+    isResizing,
+    $onDelete,
+    setSelected,
+    isEditable,
+  ]);
 
   const deleteNode = useCallback(() => {
     setModalOpen(false);
     return editor.update(() => {
       const node = $getNodeByKey(nodeKey);
-      if ($isExcalidrawNode(node)) {
+      if (node) {
         node.remove();
       }
     });
   }, [editor, nodeKey]);
 
-  const setData = (newData: ReadonlyArray<ExcalidrawElementFragment>) => {
-    if (!editor.isEditable()) {
-      return;
-    }
+  const setData = (
+    els: ExcalidrawInitialElements,
+    aps: Partial<AppState>,
+    fls: BinaryFiles,
+  ) => {
     return editor.update(() => {
       const node = $getNodeByKey(nodeKey);
       if ($isExcalidrawNode(node)) {
-        if (newData.length > 0) {
-          node.setData(JSON.stringify(newData));
+        if ((els && els.length > 0) || Object.keys(fls).length > 0) {
+          node.setData(
+            JSON.stringify({
+              appState: aps,
+              elements: els,
+              files: fls,
+            }),
+          );
         } else {
           node.remove();
         }
@@ -143,27 +163,64 @@ export default function ExcalidrawComponent({
     setIsResizing(true);
   };
 
-  const onResizeEnd = () => {
+  const onResizeEnd = (
+    nextWidth: 'inherit' | number,
+    nextHeight: 'inherit' | number,
+  ) => {
     // Delay hiding the resize bars for click case
     setTimeout(() => {
       setIsResizing(false);
     }, 200);
+
+    editor.update(() => {
+      const node = $getNodeByKey(nodeKey);
+
+      if ($isExcalidrawNode(node)) {
+        node.setWidth(nextWidth);
+        node.setHeight(nextHeight);
+      }
+    });
   };
 
-  const elements = useMemo(() => JSON.parse(data), [data]);
+  const openModal = useCallback(() => {
+    setModalOpen(true);
+  }, []);
+
+  const {
+    elements = [],
+    files = {},
+    appState = {},
+  } = useMemo(() => JSON.parse(data), [data]);
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    if (elements.length === 0) {
+      editor.update(() => {
+        const node = $getNodeByKey(nodeKey);
+        if (node) {
+          node.remove();
+        }
+      });
+    }
+  }, [editor, nodeKey, elements.length]);
+
   return (
     <>
-      <ExcalidrawModal
-        initialElements={elements}
-        isShown={isModalOpen}
-        onDelete={deleteNode}
-        onSave={(newData) => {
-          editor.setEditable(true);
-          setData(newData);
-          setModalOpen(false);
-        }}
-        closeOnClickOutside={true}
-      />
+      {isEditable && isModalOpen && (
+        <ExcalidrawModal
+          initialElements={elements}
+          initialFiles={files}
+          initialAppState={appState}
+          isShown={isModalOpen}
+          onDelete={deleteNode}
+          onClose={closeModal}
+          onSave={(els, aps, fls) => {
+            setData(els, aps, fls);
+            setModalOpen(false);
+          }}
+          closeOnClickOutside={false}
+        />
+      )}
       {elements.length > 0 && (
         <button
           ref={buttonRef}
@@ -172,8 +229,21 @@ export default function ExcalidrawComponent({
             imageContainerRef={imageContainerRef}
             className="image"
             elements={elements}
+            files={files}
+            appState={appState}
+            width={width}
+            height={height}
           />
-          {(isSelected || isResizing) && (
+          {isSelected && isEditable && (
+            <div
+              className="image-edit-button"
+              role="button"
+              tabIndex={0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={openModal}
+            />
+          )}
+          {(isSelected || isResizing) && isEditable && (
             <ImageResizer
               buttonRef={captionButtonRef}
               showCaption={true}

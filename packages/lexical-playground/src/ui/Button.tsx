@@ -6,12 +6,14 @@
  *
  */
 
+import type {JSX} from 'react';
+
 import './Button.css';
 
 import * as React from 'react';
 import {ReactNode} from 'react';
 
-import joinClasses from '../utils/join-classes';
+import joinClasses from '../utils/joinClasses';
 
 export default function Button({
   'data-test-id': dataTestId,

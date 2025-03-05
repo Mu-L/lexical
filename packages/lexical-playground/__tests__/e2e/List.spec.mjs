@@ -9,14 +9,18 @@
 import {expect} from '@playwright/test';
 
 import {
+  indent,
   moveLeft,
   moveRight,
   moveToEditorBeginning,
   moveToEditorEnd,
+  moveToLineBeginning,
   moveToParagraphEnd,
+  pressBackspace,
   redo,
   selectAll,
   selectCharacters,
+  toggleBold,
   undo,
 } from '../keyboardShortcuts/index.mjs';
 import {
@@ -31,9 +35,11 @@ import {
   pasteFromClipboard,
   repeat,
   selectFromAlignDropdown,
+  selectFromColorPicker,
   selectFromFormatDropdown,
   test,
   waitForSelector,
+  withExclusiveClipboardAccess,
 } from '../utils/index.mjs';
 
 async function toggleBulletList(page) {
@@ -67,142 +73,65 @@ test.beforeEach(({isPlainText}) => {
   test.skip(isPlainText);
 });
 
-test.describe('Nested List', () => {
+test.describe.parallel('Nested List', () => {
   test.beforeEach(({isCollab, page}) => initialize({isCollab, page}));
-  test(`Can toggle an empty list on/off`, async ({page}) => {
-    await focusEditor(page);
 
-    await assertHTML(
-      page,
-      html`
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-      `,
-    );
+  test(
+    `Can create a list and partially copy some content out of it`,
+    {
+      tag: '@flaky',
+    },
+    async ({page, isCollab}) => {
+      await focusEditor(page);
+      await page.keyboard.type(
+        'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam venenatis risus ac cursus efficitur. Cras efficitur magna odio, lacinia posuere mauris placerat in. Etiam eu congue nisl. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Nulla vulputate justo id eros convallis, vel pellentesque orci hendrerit. Pellentesque accumsan molestie eros, vitae tempor nisl semper sit amet. Sed vulputate leo dolor, et bibendum quam feugiat eget. Praesent vestibulum libero sed enim ornare, in consequat dui posuere. Maecenas ornare vestibulum felis, non elementum urna imperdiet sit amet.',
+      );
+      await toggleBulletList(page);
+      await moveToEditorBeginning(page);
+      await moveRight(page, 6);
+      await selectCharacters(page, 'right', 11);
 
-    await toggleBulletList(page);
+      await withExclusiveClipboardAccess(async () => {
+        const clipboard = await copyToClipboard(page);
 
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem" value="1"><br></li></ul>',
-    );
+        await moveToEditorEnd(page);
+        await page.keyboard.press('Enter');
+        await page.keyboard.press('Enter');
 
-    await toggleBulletList(page);
+        await pasteFromClipboard(page, clipboard);
+      });
 
-    await assertHTML(
-      page,
-      html`
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-      `,
-    );
-  });
-
-  test(`Can create a list and indent/outdent it`, async ({page}) => {
-    await focusEditor(page);
-    await toggleBulletList(page);
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem" value="1"><br></li></ul>',
-    );
-
-    // Should allow indenting an empty list item
-    await clickIndentButton(page, 2);
-
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem" value="1"><ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem" value="1"><ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem" value="1"><br></li></ul></li></ul></li></ul>',
-    );
-
-    // Backspace should "unindent" the first list item.
-    await page.keyboard.press('Backspace');
-    await page.keyboard.press('Backspace');
-
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem" value="1"><br></li></ul>',
-    );
-
-    await page.keyboard.type('Hello');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('from');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('the');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('other');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('side');
-
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="1"><span data-lexical-text="true">Hello</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="2"><span data-lexical-text="true">from</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="3"><span data-lexical-text="true">the</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="4"><span data-lexical-text="true">other</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="5"><span data-lexical-text="true">side</span></li></ul>',
-    );
-
-    await selectAll(page);
-
-    await clickIndentButton(page, 3);
-
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem" value="1"><ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem" value="1"><ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem" value="1"><ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="1"><span data-lexical-text="true">Hello</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="2"><span data-lexical-text="true">from</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="3"><span data-lexical-text="true">the</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="4"><span data-lexical-text="true">other</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="5"><span data-lexical-text="true">side</span></li></ul></li></ul></li></ul></li></ul>',
-    );
-
-    await clickOutdentButton(page, 3);
-
-    await assertHTML(
-      page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="1"><span data-lexical-text="true">Hello</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="2"><span data-lexical-text="true">from</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="3"><span data-lexical-text="true">the</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="4"><span data-lexical-text="true">other</span></li><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="5"><span data-lexical-text="true">side</span></li></ul>',
-    );
-  });
-
-  test(`Can create a list and partially copy some content out of it`, async ({
-    page,
-  }) => {
-    await focusEditor(page);
-    await page.keyboard.type(
-      'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam venenatis risus ac cursus efficitur. Cras efficitur magna odio, lacinia posuere mauris placerat in. Etiam eu congue nisl. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Nulla vulputate justo id eros convallis, vel pellentesque orci hendrerit. Pellentesque accumsan molestie eros, vitae tempor nisl semper sit amet. Sed vulputate leo dolor, et bibendum quam feugiat eget. Praesent vestibulum libero sed enim ornare, in consequat dui posuere. Maecenas ornare vestibulum felis, non elementum urna imperdiet sit amet.',
-    );
-    await toggleBulletList(page);
-    await moveToEditorBeginning(page);
-    await moveRight(page, 6);
-    await selectCharacters(page, 'right', 11);
-
-    const clipboard = await copyToClipboard(page);
-
-    await moveToEditorEnd(page);
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-
-    await pasteFromClipboard(page, clipboard);
-
-    await assertHTML(
-      page,
-      html`
-        <ul class="PlaygroundEditorTheme__ul">
-          <li
-            value="1"
-            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+      await assertHTML(
+        page,
+        html`
+          <ul class="PlaygroundEditorTheme__ul">
+            <li
+              class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+              dir="ltr"
+              value="1">
+              <span data-lexical-text="true">
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam
+                venenatis risus ac cursus efficitur. Cras efficitur magna odio,
+                lacinia posuere mauris placerat in. Etiam eu congue nisl.
+                Vestibulum ante ipsum primis in faucibus orci luctus et ultrices
+                posuere cubilia curae; Nulla vulputate justo id eros convallis,
+                vel pellentesque orci hendrerit. Pellentesque accumsan molestie
+                eros, vitae tempor nisl semper sit amet. Sed vulputate leo
+                dolor, et bibendum quam feugiat eget. Praesent vestibulum libero
+                sed enim ornare, in consequat dui posuere. Maecenas ornare
+                vestibulum felis, non elementum urna imperdiet sit amet.
+              </span>
+            </li>
+          </ul>
+          <p
+            class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
             dir="ltr">
-            <span data-lexical-text="true">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam
-              venenatis risus ac cursus efficitur. Cras efficitur magna odio,
-              lacinia posuere mauris placerat in. Etiam eu congue nisl.
-              Vestibulum ante ipsum primis in faucibus orci luctus et ultrices
-              posuere cubilia curae; Nulla vulputate justo id eros convallis,
-              vel pellentesque orci hendrerit. Pellentesque accumsan molestie
-              eros, vitae tempor nisl semper sit amet. Sed vulputate leo dolor,
-              et bibendum quam feugiat eget. Praesent vestibulum libero sed enim
-              ornare, in consequat dui posuere. Maecenas ornare vestibulum
-              felis, non elementum urna imperdiet sit amet.
-            </span>
-          </li>
-        </ul>
-        <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
-          <span data-lexical-text="true">ipsum dolor</span>
-        </p>
-      `,
-    );
-  });
+            <span data-lexical-text="true">ipsum dolor</span>
+          </p>
+        `,
+      );
+    },
+  );
 
   test('Should outdent if indented when the backspace key is pressed', async ({
     page,
@@ -232,6 +161,89 @@ test.describe('Nested List', () => {
     await assertHTML(
       page,
       '<ul class="PlaygroundEditorTheme__ul"><li value="1" class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr"><span data-lexical-text="true">Hello</span></li><li value="2" class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"><ul class="PlaygroundEditorTheme__ul"><li value="1" class="PlaygroundEditorTheme__listItem"><br></li></ul></li></ul>',
+    );
+  });
+
+  test('Should retain selection style when exiting list', async ({page}) => {
+    await focusEditor(page);
+    await toggleBulletList(page);
+
+    await selectFromColorPicker(page);
+    await toggleBold(page);
+    await page.keyboard.type('Item one');
+    await page.keyboard.press('Enter');
+    await clickIndentButton(page);
+    await page.keyboard.type('Nested item two');
+    // Double-enter to exit nested list
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Item three');
+    // Double-enter to exit list
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Normal text');
+
+    const expectedColor = 'rgb(208, 2, 27)';
+
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            style="color: ${expectedColor};"
+            value="1">
+            <strong
+              class="PlaygroundEditorTheme__textBold"
+              style="color: ${expectedColor};"
+              data-lexical-text="true">
+              Item one
+            </strong>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            style="color: ${expectedColor};"
+            value="2">
+            <ul class="PlaygroundEditorTheme__ul">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                style="color: ${expectedColor};"
+                value="1">
+                <strong
+                  class="PlaygroundEditorTheme__textBold"
+                  style="color: ${expectedColor};"
+                  data-lexical-text="true">
+                  Nested item two
+                </strong>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            style="color: ${expectedColor};"
+            value="2">
+            <strong
+              class="PlaygroundEditorTheme__textBold"
+              style="color: ${expectedColor};"
+              data-lexical-text="true">
+              Item three
+            </strong>
+          </li>
+        </ul>
+        <p
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
+          dir="ltr">
+          <strong
+            class="PlaygroundEditorTheme__textBold"
+            style="color: ${expectedColor};"
+            data-lexical-text="true">
+            Normal text
+          </strong>
+        </p>
+      `,
     );
   });
 
@@ -338,17 +350,17 @@ test.describe('Nested List', () => {
             <ul>
               <li value="1">
                 <ul>
-                  <li value="1" dir="ltr">
+                  <li dir="ltr" value="1">
                     <span data-lexical-text="true">foo</span>
                   </li>
                 </ul>
               </li>
-              <li value="1" dir="ltr">
+              <li dir="ltr" value="1">
                 <span data-lexical-text="true">bar</span>
               </li>
               <li value="2">
                 <ul>
-                  <li value="1" dir="ltr">
+                  <li dir="ltr" value="1">
                     <span data-lexical-text="true">baz</span>
                   </li>
                 </ul>
@@ -495,30 +507,420 @@ test.describe('Nested List', () => {
       page,
       html`
         <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent PlaygroundEditorTheme__ltr"
+          dir="ltr"
+          style="padding-inline-start: calc(120px)">
           <span data-lexical-text="true">Hello</span>
         </p>
         <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent PlaygroundEditorTheme__ltr"
+          dir="ltr"
+          style="padding-inline-start: calc(120px)">
           <span data-lexical-text="true">from</span>
         </p>
         <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent PlaygroundEditorTheme__ltr"
+          dir="ltr"
+          style="padding-inline-start: calc(120px)">
           <span data-lexical-text="true">the</span>
         </p>
         <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent PlaygroundEditorTheme__ltr"
+          dir="ltr"
+          style="padding-inline-start: calc(120px)">
           <span data-lexical-text="true">other</span>
         </p>
         <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent PlaygroundEditorTheme__ltr"
+          dir="ltr"
+          style="padding-inline-start: calc(120px)">
           <span data-lexical-text="true">side</span>
         </p>
+      `,
+    );
+  });
+
+  test(`Can toggle format for multi-line list of each type without losing indentation state.`, async ({
+    page,
+  }) => {
+    await focusEditor(page);
+
+    // Standard assertion
+    await assertHTML(
+      page,
+      html`
+        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+      `,
+    );
+
+    await toggleBulletList(page);
+
+    await page.keyboard.type('Hello');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('from');
+    await clickIndentButton(page);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('the');
+    await clickIndentButton(page);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('other');
+    await clickOutdentButton(page);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('side');
+    await clickOutdentButton(page);
+
+    // Before toggle off/on unordered list
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ul class="PlaygroundEditorTheme__ul">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="1">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ul class="PlaygroundEditorTheme__ul">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    value="1">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ul>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="2">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="2">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ul>
+      `,
+    );
+
+    await selectAll(page);
+
+    await toggleBulletList(page);
+    await toggleBulletList(page);
+
+    // After toggle off/on unordered list
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ul class="PlaygroundEditorTheme__ul">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="1">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ul class="PlaygroundEditorTheme__ul">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    value="1">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ul>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="2">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="2">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ul>
+      `,
+    );
+
+    await toggleNumberedList(page);
+
+    // Before toggle off/on ordered list
+    await assertHTML(
+      page,
+      html`
+        <ol class="PlaygroundEditorTheme__ol1">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ol class="PlaygroundEditorTheme__ol2">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="1">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ol class="PlaygroundEditorTheme__ol3">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    value="1">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ol>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="2">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ol>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="2">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ol>
+      `,
+    );
+
+    await toggleNumberedList(page);
+    await toggleNumberedList(page);
+
+    // After toggle off/on ordered list
+    await assertHTML(
+      page,
+      html`
+        <ol class="PlaygroundEditorTheme__ol1">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ol class="PlaygroundEditorTheme__ol2">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="1">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ol class="PlaygroundEditorTheme__ol3">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    value="1">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ol>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="2">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ol>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="2">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ol>
+      `,
+    );
+
+    await toggleCheckList(page);
+
+    // Before toggle off/on checklist
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            role="checkbox"
+            tabindex="-1"
+            value="1"
+            aria-checked="false">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ul
+              class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                role="checkbox"
+                tabindex="-1"
+                value="1"
+                aria-checked="false">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ul
+                  class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    role="checkbox"
+                    tabindex="-1"
+                    value="1"
+                    aria-checked="false">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ul>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                role="checkbox"
+                tabindex="-1"
+                value="2"
+                aria-checked="false">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            role="checkbox"
+            tabindex="-1"
+            value="2"
+            aria-checked="false">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ul>
+      `,
+    );
+
+    await toggleCheckList(page);
+    await toggleCheckList(page);
+
+    // After toggle off/on checklist
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            role="checkbox"
+            tabindex="-1"
+            value="1"
+            aria-checked="false">
+            <span data-lexical-text="true">Hello</span>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ul
+              class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                role="checkbox"
+                tabindex="-1"
+                value="1"
+                aria-checked="false">
+                <span data-lexical-text="true">from</span>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
+                value="2">
+                <ul
+                  class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
+                  <li
+                    class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                    dir="ltr"
+                    role="checkbox"
+                    tabindex="-1"
+                    value="1"
+                    aria-checked="false">
+                    <span data-lexical-text="true">the</span>
+                  </li>
+                </ul>
+              </li>
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                role="checkbox"
+                tabindex="-1"
+                value="2"
+                aria-checked="false">
+                <span data-lexical-text="true">other</span>
+              </li>
+            </ul>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            role="checkbox"
+            tabindex="-1"
+            value="2"
+            aria-checked="false">
+            <span data-lexical-text="true">side</span>
+          </li>
+        </ul>
       `,
     );
   });
@@ -562,9 +964,10 @@ test.describe('Nested List', () => {
           dir="ltr">
           <span data-lexical-text="true">One</span>
           <a
-            href="https://"
             class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
-            dir="ltr">
+            dir="ltr"
+            href="https://"
+            rel="noreferrer">
             <span data-lexical-text="true">two</span>
           </a>
           <span data-lexical-text="true">three</span>
@@ -579,7 +982,7 @@ test.describe('Nested List', () => {
 
     await assertHTML(
       page,
-      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="1"><span data-lexical-text="true">One </span><a href="https://" class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr" dir="ltr"><span data-lexical-text="true">two</span></a><span data-lexical-text="true"> three</span></li></ul>',
+      '<ul class="PlaygroundEditorTheme__ul"><li class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr" dir="ltr" value="1"><span data-lexical-text="true">One </span><a href="https://" rel="noreferrer" class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr" dir="ltr"><span data-lexical-text="true">two</span></a><span data-lexical-text="true"> three</span></li></ul>',
     );
 
     await toggleBulletList(page);
@@ -592,9 +995,10 @@ test.describe('Nested List', () => {
           dir="ltr">
           <span data-lexical-text="true">One</span>
           <a
-            href="https://"
             class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
-            dir="ltr">
+            dir="ltr"
+            href="https://"
+            rel="noreferrer">
             <span data-lexical-text="true">two</span>
           </a>
           <span data-lexical-text="true">three</span>
@@ -1132,7 +1536,7 @@ test.describe('Nested List', () => {
       page,
       html`
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">a</span>
           </li>
         </ul>
@@ -1163,10 +1567,10 @@ test.describe('Nested List', () => {
       page,
       html`
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">a</span>
           </li>
-          <li value="2" dir="ltr">
+          <li dir="ltr" value="2">
             <span data-lexical-text="true">b</span>
           </li>
         </ul>
@@ -1179,7 +1583,7 @@ test.describe('Nested List', () => {
       page,
       html`
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">a</span>
           </li>
         </ul>
@@ -1205,13 +1609,13 @@ test.describe('Nested List', () => {
       page,
       html`
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">a</span>
           </li>
-          <li value="2" dir="ltr">
+          <li dir="ltr" value="2">
             <span data-lexical-text="true">b</span>
           </li>
-          <li value="3" dir="ltr">
+          <li dir="ltr" value="3">
             <span data-lexical-text="true">c</span>
           </li>
         </ul>
@@ -1224,13 +1628,13 @@ test.describe('Nested List', () => {
       page,
       html`
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">a</span>
           </li>
         </ul>
         <p dir="ltr"><span data-lexical-text="true">b</span></p>
         <ul>
-          <li value="1" dir="ltr">
+          <li dir="ltr" value="1">
             <span data-lexical-text="true">c</span>
           </li>
         </ul>
@@ -1252,41 +1656,43 @@ test.describe('Nested List', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.type('b');
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Tab');
+    await click(page, '.toolbar-item.alignment');
+    await click(page, 'button:has-text("Indent")');
     await page.keyboard.type('c');
     await assertHTML(
       page,
       html`
-        <ul class="PlaygroundEditorTheme__ul">
+        <ul class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
           <li
-            aria-checked="true"
-            role="checkbox"
-            tabindex="-1"
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr PlaygroundEditorTheme__listItemChecked"
             dir="ltr"
-            value="1">
+            role="checkbox"
+            tabindex="-1"
+            value="1"
+            aria-checked="true">
             <span data-lexical-text="true">a</span>
           </li>
           <li
-            aria-checked="false"
-            role="checkbox"
-            tabindex="-1"
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
             dir="ltr"
-            value="2">
+            role="checkbox"
+            tabindex="-1"
+            value="2"
+            aria-checked="false">
             <span data-lexical-text="true">b</span>
           </li>
           <li
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
             value="3">
-            <ul class="PlaygroundEditorTheme__ul">
+            <ul
+              class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
               <li
-                aria-checked="false"
-                role="checkbox"
-                tabindex="-1"
                 class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
                 dir="ltr"
-                value="1">
+                role="checkbox"
+                tabindex="-1"
+                value="1"
+                aria-checked="false">
                 <span data-lexical-text="true">c</span>
               </li>
             </ul>
@@ -1315,14 +1721,15 @@ test.describe('Nested List', () => {
           <li
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
             value="3">
-            <ul class="PlaygroundEditorTheme__ul">
+            <ul
+              class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
               <li
-                aria-checked="false"
-                role="checkbox"
-                tabindex="-1"
                 class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
                 dir="ltr"
-                value="1">
+                role="checkbox"
+                tabindex="-1"
+                value="1"
+                aria-checked="false">
                 <span data-lexical-text="true">c</span>
               </li>
             </ul>
@@ -1334,36 +1741,37 @@ test.describe('Nested List', () => {
     await assertHTML(
       page,
       html`
-        <ul class="PlaygroundEditorTheme__ul">
+        <ul class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
           <li
-            aria-checked="false"
-            role="checkbox"
-            tabindex="-1"
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
             dir="ltr"
-            value="1">
+            role="checkbox"
+            tabindex="-1"
+            value="1"
+            aria-checked="false">
             <span data-lexical-text="true">a</span>
           </li>
           <li
-            aria-checked="false"
-            role="checkbox"
-            tabindex="-1"
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
             dir="ltr"
-            value="2">
+            role="checkbox"
+            tabindex="-1"
+            value="2"
+            aria-checked="false">
             <span data-lexical-text="true">b</span>
           </li>
           <li
             class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__nestedListItem"
             value="3">
-            <ul class="PlaygroundEditorTheme__ul">
+            <ul
+              class="PlaygroundEditorTheme__ul PlaygroundEditorTheme__checklist">
               <li
-                aria-checked="false"
-                role="checkbox"
-                tabindex="-1"
                 class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__listItemUnchecked PlaygroundEditorTheme__ltr"
                 dir="ltr"
-                value="1">
+                role="checkbox"
+                tabindex="-1"
+                value="1"
+                aria-checked="false">
                 <span data-lexical-text="true">c</span>
               </li>
             </ul>
@@ -1373,66 +1781,71 @@ test.describe('Nested List', () => {
     );
   });
 
-  test('can navigate and check/uncheck with keyboard', async ({
-    page,
-    isCollab,
-  }) => {
-    await focusEditor(page);
-    await toggleCheckList(page);
-    //
-    // [ ] a
-    // [ ] b
-    //     [ ] c
-    //         [ ] d
-    //         [ ] e
-    // [ ] f
-    await page.keyboard.type('a');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('b');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Tab');
-    await page.keyboard.type('c');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Tab');
-    await page.keyboard.type('d');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('e');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Backspace');
-    await page.keyboard.press('Backspace');
-    await page.keyboard.type('f');
+  test(
+    'can navigate and check/uncheck with keyboard',
+    {
+      tag: '@flaky',
+    },
+    async ({page, isCollab}) => {
+      await focusEditor(page);
+      await toggleCheckList(page);
+      //
+      // [ ] a
+      // [ ] b
+      //     [ ] c
+      //         [ ] d
+      //         [ ] e
+      // [ ] f
+      await page.keyboard.type('a');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('b');
+      await page.keyboard.press('Enter');
+      await click(page, '.toolbar-item.alignment');
+      await click(page, 'button:has-text("Indent")');
+      await page.keyboard.type('c');
+      await page.keyboard.press('Enter');
+      await click(page, '.toolbar-item.alignment');
+      await click(page, 'button:has-text("Indent")');
+      await page.keyboard.type('d');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('e');
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type('f');
 
-    const assertCheckCount = async (checkCount, uncheckCount) => {
-      const pageOrFrame = await (isCollab ? page.frame('left') : page);
-      await expect(
-        pageOrFrame.locator('li[role="checkbox"][aria-checked="true"]'),
-      ).toHaveCount(checkCount);
-      await expect(
-        pageOrFrame.locator('li[role="checkbox"][aria-checked="false"]'),
-      ).toHaveCount(uncheckCount);
-    };
+      const assertCheckCount = async (checkCount, uncheckCount) => {
+        const pageOrFrame = await (isCollab ? page.frame('left') : page);
+        await expect(
+          pageOrFrame.locator('li[role="checkbox"][aria-checked="true"]'),
+        ).toHaveCount(checkCount);
+        await expect(
+          pageOrFrame.locator('li[role="checkbox"][aria-checked="false"]'),
+        ).toHaveCount(uncheckCount);
+      };
 
-    await assertCheckCount(0, 6);
+      await assertCheckCount(0, 6);
 
-    // Go back to select checkbox
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('Space');
-
-    await repeat(5, async () => {
-      await page.keyboard.press('ArrowUp', {delay: 50});
+      // Go back to select checkbox
+      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowLeft');
       await page.keyboard.press('Space');
-    });
 
-    await assertCheckCount(6, 0);
+      await repeat(5, async () => {
+        await page.keyboard.press('ArrowUp', {delay: 50});
+        await page.keyboard.press('Space');
+      });
 
-    await repeat(3, async () => {
-      await page.keyboard.press('ArrowDown', {delay: 50});
-      await page.keyboard.press('Space');
-    });
+      await assertCheckCount(6, 0);
 
-    await assertCheckCount(3, 3);
-  });
+      await repeat(3, async () => {
+        await page.keyboard.press('ArrowDown', {delay: 50});
+        await page.keyboard.press('Space');
+      });
+
+      await assertCheckCount(3, 3);
+    },
+  );
 
   test('replaces existing element node', async ({page}) => {
     // Create two quote blocks, select it and format to a list
@@ -1471,7 +1884,8 @@ test.describe('Nested List', () => {
     await page.keyboard.type('Hello World');
     await page.keyboard.press('Enter');
     await toggleBulletList(page);
-    await page.keyboard.press('Tab');
+    await click(page, '.toolbar-item.alignment');
+    await click(page, 'button:has-text("Indent")');
     await toggleBulletList(page);
     await assertHTML(
       page,
@@ -1481,10 +1895,13 @@ test.describe('Nested List', () => {
           dir="ltr">
           <span data-lexical-text="true">Hello World</span>
         </p>
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+        <p
+          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent"
+          style="padding-inline-start: calc(40px)">
+          <br />
+        </p>
       `,
     );
-    await page.pause();
     await assertSelection(page, {
       anchorOffset: 0,
       anchorPath: [1],
@@ -1493,20 +1910,147 @@ test.describe('Nested List', () => {
     });
   });
 
-  test('remove list breaks when selection in empty nested list item 2', async ({
+  test(
+    'remove list breaks when selection in empty nested list item 2',
+    {
+      tag: '@flaky',
+    },
+    async ({page}) => {
+      await focusEditor(page);
+      await page.keyboard.type('Hello World');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('a');
+      await toggleBulletList(page);
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('b');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Enter');
+      await click(page, '.toolbar-item.alignment');
+      await click(page, 'button:has-text("Indent")');
+      await toggleBulletList(page);
+      await assertHTML(
+        page,
+        html`
+          <p
+            class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
+            dir="ltr">
+            <span data-lexical-text="true">Hello World</span>
+          </p>
+          <ul class="PlaygroundEditorTheme__ul">
+            <li
+              class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+              dir="ltr"
+              value="1">
+              <span data-lexical-text="true">a</span>
+            </li>
+          </ul>
+          <p
+            class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__indent"
+            style="padding-inline-start: calc(40px)">
+            <br />
+          </p>
+          <ul class="PlaygroundEditorTheme__ul">
+            <li
+              class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+              dir="ltr"
+              value="1">
+              <span data-lexical-text="true">b</span>
+            </li>
+          </ul>
+        `,
+      );
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [2],
+        focusOffset: 0,
+        focusPath: [2],
+      });
+    },
+  );
+  test('new list item should preserve format from previous list item even after new list item is indented', async ({
     page,
   }) => {
     await focusEditor(page);
+    await toggleBulletList(page);
+    await toggleBold(page);
+    await page.keyboard.type('MLH Fellowship');
+    await page.keyboard.press('Enter');
+    await indent(page, 1);
+    await page.keyboard.type('Fall 2024');
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <strong
+              class="PlaygroundEditorTheme__textBold"
+              data-lexical-text="true">
+              MLH Fellowship
+            </strong>
+          </li>
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__nestedListItem"
+            value="2">
+            <ul class="PlaygroundEditorTheme__ul">
+              <li
+                class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+                dir="ltr"
+                value="1">
+                <strong
+                  class="PlaygroundEditorTheme__textBold"
+                  data-lexical-text="true">
+                  Fall 2024
+                </strong>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      `,
+    );
+  });
+  test('collapseAtStart for trivial bullet list', async ({page}) => {
+    await focusEditor(page);
+    await toggleBulletList(page);
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li class="PlaygroundEditorTheme__listItem" value="1">
+            <br />
+          </li>
+        </ul>
+      `,
+    );
+    await pressBackspace(page);
+    await assertHTML(
+      page,
+      html`
+        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
+      `,
+    );
+  });
+  test('collapseAtStart for bullet list with text', async ({page}) => {
+    await focusEditor(page);
+    await toggleBulletList(page);
     await page.keyboard.type('Hello World');
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('a');
-    await toggleBulletList(page);
-    await page.keyboard.press('Enter');
-    await page.keyboard.type('b');
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Tab');
-    await toggleBulletList(page);
+    await moveToLineBeginning(page);
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <span data-lexical-text="true">Hello World</span>
+          </li>
+        </ul>
+      `,
+    );
+    await pressBackspace(page);
     await assertHTML(
       page,
       html`
@@ -1515,25 +2059,47 @@ test.describe('Nested List', () => {
           dir="ltr">
           <span data-lexical-text="true">Hello World</span>
         </p>
-        <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
-          <span data-lexical-text="true">a</span>
-        </p>
-        <p class="PlaygroundEditorTheme__paragraph"><br /></p>
-        <p
-          class="PlaygroundEditorTheme__paragraph PlaygroundEditorTheme__ltr"
-          dir="ltr">
-          <span data-lexical-text="true">b</span>
+      `,
+    );
+  });
+  test('collapseAtStart for bullet list with text inside autolink', async ({
+    page,
+  }) => {
+    await focusEditor(page);
+    await toggleBulletList(page);
+    await page.keyboard.type('www.example.com');
+    await moveToLineBeginning(page);
+    await assertHTML(
+      page,
+      html`
+        <ul class="PlaygroundEditorTheme__ul">
+          <li
+            class="PlaygroundEditorTheme__listItem PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            value="1">
+            <a
+              class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
+              dir="ltr"
+              href="https://www.example.com">
+              <span data-lexical-text="true">www.example.com</span>
+            </a>
+          </li>
+        </ul>
+      `,
+    );
+    await pressBackspace(page);
+    await assertHTML(
+      page,
+      html`
+        <p class="PlaygroundEditorTheme__paragraph">
+          <a
+            class="PlaygroundEditorTheme__link PlaygroundEditorTheme__ltr"
+            dir="ltr"
+            href="https://www.example.com">
+            <span data-lexical-text="true">www.example.com</span>
+          </a>
         </p>
       `,
     );
-    await page.pause();
-    await assertSelection(page, {
-      anchorOffset: 0,
-      anchorPath: [2],
-      focusOffset: 0,
-      focusPath: [2],
-    });
   });
 });

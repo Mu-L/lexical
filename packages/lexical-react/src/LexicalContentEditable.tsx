@@ -6,67 +6,68 @@
  *
  */
 
+import type {Props as ElementProps} from './shared/LexicalContentEditableElement';
+import type {LexicalEditor} from 'lexical';
+import type {JSX} from 'react';
+
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import * as React from 'react';
-import {CSSProperties, useCallback, useState} from 'react';
-import useLayoutEffect from 'shared/useLayoutEffect';
+import {forwardRef, Ref, useLayoutEffect, useState} from 'react';
 
-export type Props = Readonly<{
-  ariaActiveDescendantID?: string;
-  ariaAutoComplete?: string;
-  ariaControls?: string;
-  ariaDescribedBy?: string;
-  ariaExpanded?: boolean;
-  ariaLabel?: string;
-  ariaLabelledBy?: string;
-  ariaMultiline?: boolean;
-  ariaOwneeID?: string;
-  ariaRequired?: string;
-  autoCapitalize?: boolean;
-  autoComplete?: boolean;
-  autoCorrect?: boolean;
-  className?: string;
-  id?: string;
-  readOnly?: boolean;
-  role?: string;
-  spellCheck?: boolean;
-  style?: CSSProperties;
-  tabIndex?: number;
-  testid?: string;
-}>;
+import {ContentEditableElement} from './shared/LexicalContentEditableElement';
+import {useCanShowPlaceholder} from './shared/useCanShowPlaceholder';
 
-export function ContentEditable({
-  ariaActiveDescendantID,
-  ariaAutoComplete,
-  ariaControls,
-  ariaDescribedBy,
-  ariaExpanded,
-  ariaLabel,
-  ariaLabelledBy,
-  ariaMultiline,
-  ariaOwneeID,
-  ariaRequired,
-  autoCapitalize,
-  autoComplete,
-  autoCorrect,
-  className,
-  id,
-  role = 'textbox',
-  spellCheck = true,
-  style,
-  tabIndex,
-  testid,
-}: Props): JSX.Element {
-  const [editor] = useLexicalComposerContext();
-  const [isEditable, setEditable] = useState(false);
-
-  const ref = useCallback(
-    (rootElement: null | HTMLElement) => {
-      editor.setRootElement(rootElement);
-    },
-    [editor],
+export type ContentEditableProps = Omit<ElementProps, 'editor'> &
+  (
+    | {
+        'aria-placeholder'?: void;
+        placeholder?: null;
+      }
+    | {
+        'aria-placeholder': string;
+        placeholder:
+          | ((isEditable: boolean) => null | JSX.Element)
+          | JSX.Element;
+      }
   );
 
+/**
+ * @deprecated This type has been renamed to `ContentEditableProps` to provide a clearer and more descriptive name.
+ * For backward compatibility, this type is still exported as `Props`, but it is recommended to migrate to using `ContentEditableProps` instead.
+ *
+ * @note This alias is maintained for compatibility purposes but may be removed in future versions.
+ * Please update your codebase to use `ContentEditableProps` to ensure long-term maintainability.
+ */
+export type Props = ContentEditableProps;
+
+export const ContentEditable = forwardRef(ContentEditableImpl);
+
+function ContentEditableImpl(
+  props: ContentEditableProps,
+  ref: Ref<HTMLDivElement>,
+): JSX.Element {
+  const {placeholder, ...rest} = props;
+  const [editor] = useLexicalComposerContext();
+
+  return (
+    <>
+      <ContentEditableElement editor={editor} {...rest} ref={ref} />
+      {placeholder != null && (
+        <Placeholder editor={editor} content={placeholder} />
+      )}
+    </>
+  );
+}
+
+function Placeholder({
+  content,
+  editor,
+}: {
+  editor: LexicalEditor;
+  content: ((isEditable: boolean) => null | JSX.Element) | JSX.Element;
+}): null | JSX.Element {
+  const showPlaceholder = useCanShowPlaceholder(editor);
+
+  const [isEditable, setEditable] = useState(editor.isEditable());
   useLayoutEffect(() => {
     setEditable(editor.isEditable());
     return editor.registerEditableListener((currentIsEditable) => {
@@ -74,35 +75,19 @@ export function ContentEditable({
     });
   }, [editor]);
 
-  return (
-    <div
-      aria-activedescendant={!isEditable ? null : ariaActiveDescendantID}
-      aria-autocomplete={!isEditable ? null : ariaAutoComplete}
-      aria-controls={!isEditable ? null : ariaControls}
-      aria-describedby={ariaDescribedBy}
-      aria-expanded={
-        !isEditable ? null : role === 'combobox' ? !!ariaExpanded : null
-      }
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      aria-multiline={ariaMultiline}
-      aria-owns={!isEditable ? null : ariaOwneeID}
-      aria-required={ariaRequired}
-      autoCapitalize={
-        autoCapitalize !== undefined ? String(autoCapitalize) : undefined
-      }
-      // @ts-ignore This is a valid attribute
-      autoComplete={autoComplete}
-      autoCorrect={autoCorrect !== undefined ? String(autoCorrect) : undefined}
-      className={className}
-      contentEditable={isEditable}
-      data-testid={testid}
-      id={id}
-      ref={ref}
-      role={!isEditable ? undefined : role}
-      spellCheck={spellCheck}
-      style={style}
-      tabIndex={tabIndex}
-    />
-  );
+  if (!showPlaceholder) {
+    return null;
+  }
+
+  let placeholder = null;
+  if (typeof content === 'function') {
+    placeholder = content(isEditable);
+  } else if (content !== null) {
+    placeholder = content;
+  }
+
+  if (placeholder === null) {
+    return null;
+  }
+  return <div aria-hidden={true}>{placeholder}</div>;
 }

@@ -6,6 +6,8 @@
  *
  */
 
+import type {JSX} from 'react';
+
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
 import * as React from 'react';
 import {useMemo, useState} from 'react';
@@ -39,14 +41,33 @@ function utf8Length(text: string) {
   return currentTextEncoder.encode(text).length;
 }
 
+function DefaultRenderer({remainingCharacters}: {remainingCharacters: number}) {
+  return (
+    <span
+      className={`characters-limit ${
+        remainingCharacters < 0 ? 'characters-limit-exceeded' : ''
+      }`}>
+      {remainingCharacters}
+    </span>
+  );
+}
+
 export function CharacterLimitPlugin({
   charset = 'UTF-16',
+  maxLength = CHARACTER_LIMIT,
+  renderer = DefaultRenderer,
 }: {
   charset: 'UTF-8' | 'UTF-16';
+  maxLength: number;
+  renderer?: ({
+    remainingCharacters,
+  }: {
+    remainingCharacters: number;
+  }) => JSX.Element;
 }): JSX.Element {
   const [editor] = useLexicalComposerContext();
 
-  const [remainingCharacters, setRemainingCharacters] = useState(0);
+  const [remainingCharacters, setRemainingCharacters] = useState(maxLength);
 
   const characterLimitProps = useMemo(
     () => ({
@@ -64,14 +85,7 @@ export function CharacterLimitPlugin({
     [charset],
   );
 
-  useCharacterLimit(editor, CHARACTER_LIMIT, characterLimitProps);
+  useCharacterLimit(editor, maxLength, characterLimitProps);
 
-  return (
-    <span
-      className={`characters-limit ${
-        remainingCharacters < 0 ? 'characters-limit-exceeded' : ''
-      }`}>
-      {remainingCharacters}
-    </span>
-  );
+  return renderer({remainingCharacters});
 }

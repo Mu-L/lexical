@@ -1,5 +1,7 @@
 # `lexical`
 
+[![See API Documentation](https://lexical.dev/img/see-api-documentation.svg)](https://lexical.dev/docs/api/modules/lexical)
+
 Lexical is an extensible JavaScript web text-editor framework with an emphasis on reliability, accessibility, and performance. Lexical aims to provide a best-in-class developer experience, so you can easily prototype and build features with confidence. Combined with a highly extensible architecture, Lexical allows developers to create unique text editing experiences that scale in size and functionality.
 
 The core of Lexical is a dependency-free text editor engine that allows for powerful, simple and complex,
@@ -12,10 +14,10 @@ editor implementations to be built on top. Lexical's engine provides three main 
 By design, the core of Lexical tries to be as minimal as possible.
 Lexical doesn't directly concern itself with things that monolithic editors tend to do – such as UI components, toolbars or rich-text features and markdown. Instead
 the logic for those features can be included via a plugin interface and used as and when they're needed. This ensures great extensibility and keeps code-sizes
-to a minimal – ensuring apps only pay the cost for what they actually import.
+to a minimum – ensuring apps only pay the cost for what they actually import.
 
 For React apps, Lexical has tight integration with React 18+ via the optional `@lexical/react` package. This package provides
-production-ready utility functions, helpers and React hooks that make it seemless to create text editors within React.
+production-ready utility functions, helpers and React hooks that make it seamless to create text editors within React.
 
 ## Usage
 

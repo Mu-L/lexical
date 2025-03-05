@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  *
  */
+
+import type {JSX} from 'react';
+
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
 import {$wrapNodeInElement, mergeRegister} from '@lexical/utils';
 import {
@@ -22,12 +25,13 @@ import {
   DRAGOVER_COMMAND,
   DRAGSTART_COMMAND,
   DROP_COMMAND,
+  getDOMSelectionFromTarget,
+  isHTMLElement,
   LexicalCommand,
   LexicalEditor,
 } from 'lexical';
 import {useEffect, useRef, useState} from 'react';
 import * as React from 'react';
-import getSelection from 'shared/getDOMSelection';
 
 import landscapeImage from '../../images/landscape.jpg';
 import yellowFlowerImage from '../../images/yellow-flower.jpg';
@@ -230,21 +234,21 @@ export default function ImagesPlugin({
       editor.registerCommand<DragEvent>(
         DRAGSTART_COMMAND,
         (event) => {
-          return onDragStart(event);
+          return $onDragStart(event);
         },
         COMMAND_PRIORITY_HIGH,
       ),
       editor.registerCommand<DragEvent>(
         DRAGOVER_COMMAND,
         (event) => {
-          return onDragover(event);
+          return $onDragover(event);
         },
         COMMAND_PRIORITY_LOW,
       ),
       editor.registerCommand<DragEvent>(
         DROP_COMMAND,
         (event) => {
-          return onDrop(event, editor);
+          return $onDrop(event, editor);
         },
         COMMAND_PRIORITY_HIGH,
       ),
@@ -259,8 +263,8 @@ const TRANSPARENT_IMAGE =
 const img = document.createElement('img');
 img.src = TRANSPARENT_IMAGE;
 
-function onDragStart(event: DragEvent): boolean {
-  const node = getImageNodeInSelection();
+function $onDragStart(event: DragEvent): boolean {
+  const node = $getImageNodeInSelection();
   if (!node) {
     return false;
   }
@@ -290,8 +294,8 @@ function onDragStart(event: DragEvent): boolean {
   return true;
 }
 
-function onDragover(event: DragEvent): boolean {
-  const node = getImageNodeInSelection();
+function $onDragover(event: DragEvent): boolean {
+  const node = $getImageNodeInSelection();
   if (!node) {
     return false;
   }
@@ -301,8 +305,8 @@ function onDragover(event: DragEvent): boolean {
   return true;
 }
 
-function onDrop(event: DragEvent, editor: LexicalEditor): boolean {
-  const node = getImageNodeInSelection();
+function $onDrop(event: DragEvent, editor: LexicalEditor): boolean {
+  const node = $getImageNodeInSelection();
   if (!node) {
     return false;
   }
@@ -324,7 +328,7 @@ function onDrop(event: DragEvent, editor: LexicalEditor): boolean {
   return true;
 }
 
-function getImageNodeInSelection(): ImageNode | null {
+function $getImageNodeInSelection(): ImageNode | null {
   const selection = $getSelection();
   if (!$isNodeSelection(selection)) {
     return null;
@@ -357,17 +361,16 @@ declare global {
 function canDropImage(event: DragEvent): boolean {
   const target = event.target;
   return !!(
-    target &&
-    target instanceof HTMLElement &&
+    isHTMLElement(target) &&
     !target.closest('code, span.editor-image') &&
-    target.parentElement &&
+    isHTMLElement(target.parentElement) &&
     target.parentElement.closest('div.ContentEditable__root')
   );
 }
 
 function getDragSelection(event: DragEvent): Range | null | undefined {
   let range;
-  const domSelection = getSelection();
+  const domSelection = getDOMSelectionFromTarget(event.target);
   if (document.caretRangeFromPoint) {
     range = document.caretRangeFromPoint(event.clientX, event.clientY);
   } else if (event.rangeParent && domSelection !== null) {

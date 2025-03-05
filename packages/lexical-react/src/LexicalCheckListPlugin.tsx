@@ -16,13 +16,19 @@ import {
   insertList,
 } from '@lexical/list';
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {$findMatchingParent, mergeRegister} from '@lexical/utils';
+import {
+  $findMatchingParent,
+  calculateZoomLevel,
+  isHTMLElement,
+  mergeRegister,
+} from '@lexical/utils';
 import {
   $getNearestNodeFromDOMNode,
   $getSelection,
   $isElementNode,
   $isRangeSelection,
   COMMAND_PRIORITY_LOW,
+  getNearestEditorFromDOMNode,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_UP_COMMAND,
@@ -114,17 +120,21 @@ export function CheckListPlugin(): null {
                   anchorNode,
                   (node) => $isElementNode(node) && !node.isInline(),
                 );
+                if ($isListItemNode(elementNode)) {
+                  const parent = elementNode.getParent();
+                  if (
+                    $isListNode(parent) &&
+                    parent.getListType() === 'check' &&
+                    (isElement ||
+                      elementNode.getFirstDescendant() === anchorNode)
+                  ) {
+                    const domNode = editor.getElementByKey(elementNode.__key);
 
-                if (
-                  $isListItemNode(elementNode) &&
-                  (isElement || elementNode.getFirstDescendant() === anchorNode)
-                ) {
-                  const domNode = editor.getElementByKey(elementNode.__key);
-
-                  if (domNode != null && document.activeElement !== domNode) {
-                    domNode.focus();
-                    event.preventDefault();
-                    return true;
+                    if (domNode != null && document.activeElement !== domNode) {
+                      domNode.focus();
+                      event.preventDefault();
+                      return true;
+                    }
                   }
                 }
               }
@@ -135,33 +145,27 @@ export function CheckListPlugin(): null {
         },
         COMMAND_PRIORITY_LOW,
       ),
-      listenPointerDown(),
+      editor.registerRootListener((rootElement, prevElement) => {
+        if (rootElement !== null) {
+          rootElement.addEventListener('click', handleClick);
+          rootElement.addEventListener('pointerdown', handlePointerDown);
+        }
+
+        if (prevElement !== null) {
+          prevElement.removeEventListener('click', handleClick);
+          prevElement.removeEventListener('pointerdown', handlePointerDown);
+        }
+      }),
     );
   });
 
   return null;
 }
 
-let listenersCount = 0;
-
-function listenPointerDown() {
-  if (listenersCount++ === 0) {
-    document.addEventListener('click', handleClick);
-    document.addEventListener('pointerdown', handlePointerDown);
-  }
-
-  return () => {
-    if (--listenersCount === 0) {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('pointerdown', handlePointerDown);
-    }
-  };
-}
-
 function handleCheckItemEvent(event: PointerEvent, callback: () => void) {
   const target = event.target;
 
-  if (!(target instanceof HTMLElement)) {
+  if (!isHTMLElement(target)) {
     return;
   }
 
@@ -169,8 +173,7 @@ function handleCheckItemEvent(event: PointerEvent, callback: () => void) {
   const firstChild = target.firstChild;
 
   if (
-    firstChild != null &&
-    firstChild instanceof HTMLElement &&
+    isHTMLElement(firstChild) &&
     (firstChild.tagName === 'UL' || firstChild.tagName === 'OL')
   ) {
     return;
@@ -183,9 +186,8 @@ function handleCheckItemEvent(event: PointerEvent, callback: () => void) {
     return;
   }
 
-  const pageX = event.pageX;
   const rect = target.getBoundingClientRect();
-
+  const pageX = event.pageX / calculateZoomLevel(target);
   if (
     target.dir === 'rtl'
       ? pageX < rect.right && pageX > rect.right - 20
@@ -197,20 +199,20 @@ function handleCheckItemEvent(event: PointerEvent, callback: () => void) {
 
 function handleClick(event: Event) {
   handleCheckItemEvent(event as PointerEvent, () => {
-    const domNode = event.target as HTMLElement;
-    const editor = findEditor(domNode);
+    if (isHTMLElement(event.target)) {
+      const domNode = event.target;
+      const editor = getNearestEditorFromDOMNode(domNode);
 
-    if (editor != null && editor.isEditable()) {
-      editor.update(() => {
-        if (event.target) {
+      if (editor != null && editor.isEditable()) {
+        editor.update(() => {
           const node = $getNearestNodeFromDOMNode(domNode);
 
           if ($isListItemNode(node)) {
             domNode.focus();
             node.toggleChecked();
           }
-        }
-      });
+        });
+      }
     }
   });
 }
@@ -222,26 +224,10 @@ function handlePointerDown(event: PointerEvent) {
   });
 }
 
-function findEditor(target: Node) {
-  let node: ParentNode | Node | null = target;
-
-  while (node) {
-    // @ts-ignore internal field
-    if (node.__lexicalEditor) {
-      // @ts-ignore internal field
-      return node.__lexicalEditor;
-    }
-
-    node = node.parentNode;
-  }
-
-  return null;
-}
-
 function getActiveCheckListItem(): HTMLElement | null {
-  const activeElement = document.activeElement as HTMLElement;
+  const activeElement = document.activeElement;
 
-  return activeElement != null &&
+  return isHTMLElement(activeElement) &&
     activeElement.tagName === 'LI' &&
     activeElement.parentNode != null &&
     // @ts-ignore internal field

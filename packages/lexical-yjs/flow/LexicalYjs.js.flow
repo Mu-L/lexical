@@ -14,11 +14,11 @@ import type {
   ElementNode,
   LexicalCommand,
   LexicalEditor,
+  LexicalNode,
   LineBreakNode,
   NodeMap,
   NodeKey,
   TextNode,
-  IntentionallyMarkedAsDirtyElement,
 } from 'lexical';
 
 // $FlowFixMe: todo
@@ -110,6 +110,8 @@ export type Binding = {
   nodeProperties: Map<string, Array<string>>,
   root: CollabElementNode,
 };
+
+export type ExcludedProperties = Map<Class<LexicalNode>, Set<string>>;
 
 declare export class CollabDecoratorNode {
   _xmlElem: XmlElement;
@@ -219,6 +221,8 @@ declare export class CollabTextNode {
 
   destroy(binding: Binding): void;
 }
+
+type IntentionallyMarkedAsDirtyElement = boolean;
 
 declare export class CollabElementNode {
   _key: NodeKey;

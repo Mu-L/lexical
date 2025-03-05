@@ -10,25 +10,30 @@ import {
   $createParagraphNode,
   $isElementNode,
   DOMConversionMap,
+  DOMConversionOutput,
   EditorConfig,
   ElementNode,
   LexicalEditor,
   LexicalNode,
   RangeSelection,
   SerializedElementNode,
-  Spread,
 } from 'lexical';
+import {IS_CHROME} from 'shared/environment';
+import invariant from 'shared/invariant';
 
 import {$isCollapsibleContainerNode} from './CollapsibleContainerNode';
 import {$isCollapsibleContentNode} from './CollapsibleContentNode';
 
-type SerializedCollapsibleTitleNode = Spread<
-  {
-    type: 'collapsible-title';
-    version: 1;
-  },
-  SerializedElementNode
->;
+type SerializedCollapsibleTitleNode = SerializedElementNode;
+
+export function $convertSummaryElement(
+  domNode: HTMLElement,
+): DOMConversionOutput | null {
+  const node = $createCollapsibleTitleNode();
+  return {
+    node,
+  };
+}
 
 export class CollapsibleTitleNode extends ElementNode {
   static getType(): string {
@@ -42,37 +47,55 @@ export class CollapsibleTitleNode extends ElementNode {
   createDOM(config: EditorConfig, editor: LexicalEditor): HTMLElement {
     const dom = document.createElement('summary');
     dom.classList.add('Collapsible__title');
+    if (IS_CHROME) {
+      dom.addEventListener('click', () => {
+        editor.update(() => {
+          const collapsibleContainer = this.getLatest().getParentOrThrow();
+          invariant(
+            $isCollapsibleContainerNode(collapsibleContainer),
+            'Expected parent node to be a CollapsibleContainerNode',
+          );
+          collapsibleContainer.toggleOpen();
+        });
+      });
+    }
     return dom;
   }
 
-  updateDOM(prevNode: CollapsibleTitleNode, dom: HTMLElement): boolean {
+  updateDOM(prevNode: this, dom: HTMLElement): boolean {
     return false;
   }
 
   static importDOM(): DOMConversionMap | null {
-    return {};
+    return {
+      summary: (domNode: HTMLElement) => {
+        return {
+          conversion: $convertSummaryElement,
+          priority: 1,
+        };
+      },
+    };
   }
 
   static importJSON(
     serializedNode: SerializedCollapsibleTitleNode,
   ): CollapsibleTitleNode {
-    return $createCollapsibleTitleNode();
+    return $createCollapsibleTitleNode().updateFromJSON(serializedNode);
   }
 
-  exportJSON(): SerializedCollapsibleTitleNode {
-    return {
-      ...super.exportJSON(),
-      type: 'collapsible-title',
-      version: 1,
+  static transform(): (node: LexicalNode) => void {
+    return (node: LexicalNode) => {
+      invariant(
+        $isCollapsibleTitleNode(node),
+        'node is not a CollapsibleTitleNode',
+      );
+      if (node.isEmpty()) {
+        node.remove();
+      }
     };
   }
 
-  collapseAtStart(_selection: RangeSelection): boolean {
-    this.getParentOrThrow().insertBefore(this);
-    return true;
-  }
-
-  insertNewAfter(): ElementNode {
+  insertNewAfter(_: RangeSelection, restoreSelection = true): ElementNode {
     const containerNode = this.getParentOrThrow();
 
     if (!$isCollapsibleContainerNode(containerNode)) {
@@ -99,7 +122,7 @@ export class CollapsibleTitleNode extends ElementNode {
       }
     } else {
       const paragraph = $createParagraphNode();
-      containerNode.insertAfter(paragraph);
+      containerNode.insertAfter(paragraph, restoreSelection);
       return paragraph;
     }
   }

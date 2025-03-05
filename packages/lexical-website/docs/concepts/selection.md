@@ -1,6 +1,4 @@
----
-sidebar_position: 3
----
+
 
 # Selection
 
@@ -13,8 +11,10 @@ In Lexical, there are four types of selection possible:
 
 - `RangeSelection`
 - `NodeSelection`
-- `GridSelection`
+- `TableSelection` (implemented in `@lexical/table`)
 - `null`
+
+It is possible, but not generally recommended, to implement your own selection types that implement `BaseSelection`.
 
 ### `RangeSelection`
 
@@ -35,19 +35,19 @@ Both the `anchor` and `focus` points refer to an object that represents a specif
 
 NodeSelection represents a selection of multiple arbitrary nodes. For example, three images selected at the same time.
 
-- `getNodes()` returns an array containing the selected LexicalNodes 
+- `getNodes()` returns an array containing the selected LexicalNodes
 
-### `GridSelection`
+### `TableSelection`
 
-GridSelection represents a grid-like selection like tables. It stores the key of the parent node where the selection takes place and the start and end points.
-`GridSelection` consists of three main properties:
+TableSelection represents a grid-like selection like tables. It stores the key of the parent node where the selection takes place and the start and end points.
+`TableSelection` consists of three main properties:
 
-- `gridKey` representing the parent node key where the selection takes place
-- `anchor` representing a `GridSelection` point
-- `focus` reprensenting a `GridSelection` point
+- `tableKey` representing the parent node key where the selection takes place
+- `anchor` representing a `TableSelection` point
+- `focus` representing a `TableSelection` point
 
 For example, a table where you select row = 1 col = 1 to row 2 col = 2 could be stored as follows:
-- `gridKey = 2` table key
+- `tableKey = 2` table key
 - `anchor = 4` table cell (key may vary)
 - `focus = 10` table cell (key may vary)
 
@@ -60,4 +60,110 @@ has moved to another editor on the page. This can also happen when trying to sel
 
 ## Working with selection
 
-> TODO
+Selection can be found using the `$getSelection()` helper, exported from the `lexical` package. This function can be used within
+an update, a read, or a command listener.
+
+```js
+import {$getSelection, SELECTION_CHANGE_COMMAND} from 'lexical';
+
+editor.update(() => {
+  const selection = $getSelection();
+});
+
+editorState.read(() => {
+  const selection = $getSelection();
+});
+
+// SELECTION_CHANGE_COMMAND fires when selection changes within a Lexical editor.
+editor.registerCommand(SELECTION_CHANGE_COMMAND, () => {
+  const selection = $getSelection();
+});
+```
+
+In some cases you might want to create a new type of selection and set the editor selection to
+be that. This can only be done in update or command listeners.
+
+```js
+import {$setSelection, $createRangeSelection, $createNodeSelection} from 'lexical';
+
+editor.update(() => {
+  // Set a range selection
+  const rangeSelection = $createRangeSelection();
+  $setSelection(rangeSelection);
+
+  // You can also indirectly create a range selection, by calling some of the selection
+  // methods on Lexical nodes.
+  const someNode = $getNodeByKey(someKey);
+
+  // On element nodes, this will create a RangeSelection with type "element",
+  // referencing an offset relating to the child within the element.
+  // On text nodes, this will create a RangeSelection with type "text",
+  // referencing the text character offset.
+  someNode.select();
+  someNode.selectPrevious();
+  someNode.selectNext();
+
+  // You can use this on any node.
+  someNode.selectStart();
+  someNode.selectEnd();
+
+  // Set a node selection
+  const nodeSelection = $createNodeSelection();
+  // Add a node key to the selection.
+  nodeSelection.add(someKey);
+  $setSelection(nodeSelection);
+
+  // You can also clear selection by setting it to `null`.
+  $setSelection(null);
+});
+```
+
+## Focus
+
+You may notice that when you issue an `editor.update` or
+`editor.dispatchCommand` then the editor can "steal focus" if there is
+a selection and the editor is editable. This is because the Lexical
+selection is reconciled to the DOM selection during reconciliation,
+and the browser's focus follows its DOM selection.
+
+If you want to make updates or dispatch commands to the editor without
+changing the selection, can use the `'skip-dom-selection'` update tag
+(added in v0.22.0):
+
+```js
+// Call this from an editor.update or command listener
+$addUpdateTag('skip-dom-selection');
+```
+
+If you want to add this tag during processing of a `dispatchCommand`,
+you can wrap it in an `editor.update`:
+
+```js
+// NOTE: If you are already in a command listener or editor.update,
+//       do *not* nest a second editor.update! Nested updates have
+//       confusing semantics (dispatchCommand will re-use the
+//       current update without nesting)
+editor.update(() => {
+  $addUpdateTag('skip-dom-selection');
+  editor.dispatchCommand(/* … */);
+});
+```
+
+If you have to support older versions of Lexical, you can mark the editor
+as not editable during the update or dispatch.
+
+```js
+// NOTE: This code should be *outside* of your update or command listener, e.g.
+//       directly in the DOM event listener
+const prevEditable = editor.isEditable();
+editor.setEditable(false);
+editor.update(
+  () => {
+    // run your update code or editor.dispatchCommand in here
+  }, {
+    onUpdate: () => {
+      editor.setEditable(prevEditable);
+    },
+  },
+);
+```

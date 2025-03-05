@@ -6,15 +6,10 @@
  *
  */
 
-import type {
-  EditorConfig,
-  LexicalNode,
-  NodeKey,
-  SerializedTextNode,
-} from 'lexical';
+import type {EditorConfig, LexicalNode, SerializedTextNode} from 'lexical';
 
 import {addClassNamesToElement} from '@lexical/utils';
-import {TextNode} from 'lexical';
+import {$applyNodeReplacement, TextNode} from 'lexical';
 
 /** @noInheritDoc */
 export class HashtagNode extends TextNode {
@@ -26,10 +21,6 @@ export class HashtagNode extends TextNode {
     return new HashtagNode(node.__text, node.__key);
   }
 
-  constructor(text: string, key?: NodeKey) {
-    super(text, key);
-  }
-
   createDOM(config: EditorConfig): HTMLElement {
     const element = super.createDOM(config);
     addClassNamesToElement(element, config.theme.hashtag);
@@ -37,19 +28,7 @@ export class HashtagNode extends TextNode {
   }
 
   static importJSON(serializedNode: SerializedTextNode): HashtagNode {
-    const node = $createHashtagNode(serializedNode.text);
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
-  }
-
-  exportJSON(): SerializedTextNode {
-    return {
-      ...super.exportJSON(),
-      type: 'hashtag',
-    };
+    return $createHashtagNode().updateFromJSON(serializedNode);
   }
 
   canInsertTextBefore(): boolean {
@@ -61,10 +40,20 @@ export class HashtagNode extends TextNode {
   }
 }
 
+/**
+ * Generates a HashtagNode, which is a string following the format of a # followed by some text, eg. #lexical.
+ * @param text - The text used inside the HashtagNode.
+ * @returns - The HashtagNode with the embedded text.
+ */
 export function $createHashtagNode(text = ''): HashtagNode {
-  return new HashtagNode(text);
+  return $applyNodeReplacement(new HashtagNode(text));
 }
 
+/**
+ * Determines if node is a HashtagNode.
+ * @param node - The node to be checked.
+ * @returns true if node is a HashtagNode, false otherwise.
+ */
 export function $isHashtagNode(
   node: LexicalNode | null | undefined,
 ): node is HashtagNode {

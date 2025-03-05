@@ -7,6 +7,7 @@
  */
 
 import type {LexicalEditor} from 'lexical';
+import type {JSX} from 'react';
 
 import {
   AutoEmbedOption,
@@ -16,7 +17,7 @@ import {
   URL_MATCHER,
 } from '@lexical/react/LexicalAutoEmbedPlugin';
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {useState} from 'react';
+import {useMemo, useState} from 'react';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
@@ -59,7 +60,7 @@ export const YoutubeEmbedConfig: PlaygroundEmbedConfig = {
   keywords: ['youtube', 'video'],
 
   // Determine if a given URL is a match and return url data.
-  parseUrl: (url: string) => {
+  parseUrl: async (url: string) => {
     const match =
       /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/.exec(url);
 
@@ -80,12 +81,12 @@ export const YoutubeEmbedConfig: PlaygroundEmbedConfig = {
 
 export const TwitterEmbedConfig: PlaygroundEmbedConfig = {
   // e.g. Tweet or Google Map.
-  contentName: 'Tweet',
+  contentName: 'X(Tweet)',
 
-  exampleUrl: 'https://twitter.com/jack/status/20',
+  exampleUrl: 'https://x.com/jack/status/20',
 
   // Icon for display.
-  icon: <i className="icon tweet" />,
+  icon: <i className="icon x" />,
 
   // Create the Lexical embed node from the url data.
   insertNode: (editor: LexicalEditor, result: EmbedMatchResult) => {
@@ -93,17 +94,19 @@ export const TwitterEmbedConfig: PlaygroundEmbedConfig = {
   },
 
   // For extra searching.
-  keywords: ['tweet', 'twitter'],
+  keywords: ['tweet', 'twitter', 'x'],
 
   // Determine if a given URL is a match and return url data.
   parseUrl: (text: string) => {
     const match =
-      /^https:\/\/twitter\.com\/(#!\/)?(\w+)\/status(es)*\/(\d+)$/.exec(text);
+      /^https:\/\/(twitter|x)\.com\/(#!\/)?(\w+)\/status(es)*\/(\d+)/.exec(
+        text,
+      );
 
     if (match != null) {
       return {
-        id: match[4],
-        url: match[0],
+        id: match[5],
+        url: match[1],
       };
     }
 
@@ -214,6 +217,16 @@ function AutoEmbedMenu({
   );
 }
 
+const debounce = (callback: (text: string) => void, delay: number) => {
+  let timeoutId: number;
+  return (text: string) => {
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      callback(text);
+    }, delay);
+  };
+};
+
 export function AutoEmbedDialog({
   embedConfig,
   onClose,
@@ -223,10 +236,24 @@ export function AutoEmbedDialog({
 }): JSX.Element {
   const [text, setText] = useState('');
   const [editor] = useLexicalComposerContext();
+  const [embedResult, setEmbedResult] = useState<EmbedMatchResult | null>(null);
 
-  const urlMatch = URL_MATCHER.exec(text);
-  const embedResult =
-    text != null && urlMatch != null ? embedConfig.parseUrl(text) : null;
+  const validateText = useMemo(
+    () =>
+      debounce((inputText: string) => {
+        const urlMatch = URL_MATCHER.exec(inputText);
+        if (embedConfig != null && inputText != null && urlMatch != null) {
+          Promise.resolve(embedConfig.parseUrl(inputText)).then(
+            (parseResult) => {
+              setEmbedResult(parseResult);
+            },
+          );
+        } else if (embedResult != null) {
+          setEmbedResult(null);
+        }
+      }, 200),
+    [embedConfig, embedResult],
+  );
 
   const onClick = () => {
     if (embedResult != null) {
@@ -245,7 +272,9 @@ export function AutoEmbedDialog({
           value={text}
           data-test-id={`${embedConfig.type}-embed-modal-url`}
           onChange={(e) => {
-            setText(e.target.value);
+            const {value} = e.target;
+            setText(value);
+            validateText(value);
           }}
         />
       </div>
@@ -301,7 +330,11 @@ export default function AutoEmbedPlugin(): JSX.Element {
                 <div
                   className="typeahead-popover auto-embed-menu"
                   style={{
-                    marginLeft: anchorElementRef.current.style.width,
+                    marginLeft: `${Math.max(
+                      parseFloat(anchorElementRef.current.style.width) - 200,
+                      0,
+                    )}px`,
+                    width: 200,
                   }}>
                   <AutoEmbedMenu
                     options={options}

@@ -6,22 +6,26 @@
  *
  */
 
+import type {JSX} from 'react';
+
 import {exportToSvg} from '@excalidraw/excalidraw';
 import {
   ExcalidrawElement,
   NonDeleted,
 } from '@excalidraw/excalidraw/types/element/types';
-import {AppState} from '@excalidraw/excalidraw/types/types';
+import {AppState, BinaryFiles} from '@excalidraw/excalidraw/types/types';
 import * as React from 'react';
 import {useEffect, useState} from 'react';
 
 type ImageType = 'svg' | 'canvas';
 
+type Dimension = 'inherit' | number;
+
 type Props = {
   /**
    * Configures the export setting for SVG/Canvas
    */
-  appState?: Partial<Omit<AppState, 'offsetTop' | 'offsetLeft'>> | null;
+  appState: AppState;
   /**
    * The css class applied to image to be rendered
    */
@@ -31,13 +35,17 @@ type Props = {
    */
   elements: NonDeleted<ExcalidrawElement>[];
   /**
+   * The Excalidraw files associated with the elements
+   */
+  files: BinaryFiles;
+  /**
    * The height of the image to be rendered
    */
-  height?: number | null;
+  height?: Dimension;
   /**
    * The ref object to be used to render the image
    */
-  imageContainerRef: {current: null | HTMLDivElement};
+  imageContainerRef: React.MutableRefObject<HTMLDivElement | null>;
   /**
    * The type of image to be rendered
    */
@@ -49,7 +57,7 @@ type Props = {
   /**
    * The width of the image to be rendered
    */
-  width?: number | null;
+  width?: Dimension;
 };
 
 // exportToSvg has fonts from excalidraw.com
@@ -77,17 +85,21 @@ const removeStyleFromSvg_HACK = (svg: SVGElement) => {
  */
 export default function ExcalidrawImage({
   elements,
+  files,
   imageContainerRef,
-  appState = null,
+  appState,
   rootClassName = null,
+  width = 'inherit',
+  height = 'inherit',
 }: Props): JSX.Element {
   const [Svg, setSvg] = useState<SVGElement | null>(null);
 
   useEffect(() => {
     const setContent = async () => {
       const svg: SVGElement = await exportToSvg({
+        appState,
         elements,
-        files: null,
+        files,
       });
       removeStyleFromSvg_HACK(svg);
 
@@ -98,12 +110,27 @@ export default function ExcalidrawImage({
       setSvg(svg);
     };
     setContent();
-  }, [elements, appState]);
+  }, [elements, files, appState]);
+
+  const containerStyle: React.CSSProperties = {};
+  if (width !== 'inherit') {
+    containerStyle.width = `${width}px`;
+  }
+  if (height !== 'inherit') {
+    containerStyle.height = `${height}px`;
+  }
 
   return (
     <div
-      ref={imageContainerRef}
+      ref={(node) => {
+        if (node) {
+          if (imageContainerRef) {
+            imageContainerRef.current = node;
+          }
+        }
+      }}
       className={rootClassName ?? ''}
+      style={containerStyle}
       dangerouslySetInnerHTML={{__html: Svg?.outerHTML ?? ''}}
     />
   );

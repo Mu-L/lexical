@@ -6,10 +6,9 @@
  *
  */
 
-import type {ICloneSelectionContent} from './lexical-node';
 import type {
+  BaseSelection,
   ElementNode,
-  GridSelection,
   LexicalNode,
   NodeKey,
   Point,
@@ -17,22 +16,114 @@ import type {
   TextNode,
 } from 'lexical';
 
+import {TableSelection} from '@lexical/table';
 import {
-  $getDecoratorNode,
+  $caretFromPoint,
+  $createRangeSelection,
+  $extendCaretToRange,
   $getPreviousSelection,
+  $getSelection,
   $hasAncestor,
+  $isChildCaret,
   $isDecoratorNode,
   $isElementNode,
+  $isExtendableTextPointCaret,
   $isLeafNode,
   $isRangeSelection,
   $isRootNode,
   $isRootOrShadowRoot,
   $isTextNode,
   $setSelection,
+  INTERNAL_$isBlock,
 } from 'lexical';
+import invariant from 'shared/invariant';
 
-import {$cloneWithProperties} from './lexical-node';
 import {getStyleObjectFromCSS} from './utils';
+
+export function $copyBlockFormatIndent(
+  srcNode: ElementNode,
+  destNode: ElementNode,
+): void {
+  const format = srcNode.getFormatType();
+  const indent = srcNode.getIndent();
+  if (format !== destNode.getFormatType()) {
+    destNode.setFormat(format);
+  }
+  if (indent !== destNode.getIndent()) {
+    destNode.setIndent(indent);
+  }
+}
+
+/**
+ * Converts all nodes in the selection that are of one block type to another.
+ * @param selection - The selected blocks to be converted.
+ * @param $createElement - The function that creates the node. eg. $createParagraphNode.
+ * @param $afterCreateElement - The function that updates the new node based on the previous one ($copyBlockFormatIndent by default)
+ */
+export function $setBlocksType<T extends ElementNode>(
+  selection: BaseSelection | null,
+  $createElement: () => T,
+  $afterCreateElement: (
+    prevNodeSrc: ElementNode,
+    newNodeDest: T,
+  ) => void = $copyBlockFormatIndent,
+): void {
+  if (selection === null) {
+    return;
+  }
+  // Selections tend to not include their containing blocks so we effectively
+  // expand it here
+  const anchorAndFocus = selection.getStartEndPoints();
+  const blockMap = new Map<NodeKey, ElementNode>();
+  let newSelection: RangeSelection | null = null;
+  if (anchorAndFocus) {
+    const [anchor, focus] = anchorAndFocus;
+    newSelection = $createRangeSelection();
+    newSelection.anchor.set(anchor.key, anchor.offset, anchor.type);
+    newSelection.focus.set(focus.key, focus.offset, focus.type);
+    const anchorBlock = $getAncestor(anchor.getNode(), INTERNAL_$isBlock);
+    const focusBlock = $getAncestor(focus.getNode(), INTERNAL_$isBlock);
+    if ($isElementNode(anchorBlock)) {
+      blockMap.set(anchorBlock.getKey(), anchorBlock);
+    }
+    if ($isElementNode(focusBlock)) {
+      blockMap.set(focusBlock.getKey(), focusBlock);
+    }
+  }
+  for (const node of selection.getNodes()) {
+    if ($isElementNode(node) && INTERNAL_$isBlock(node)) {
+      blockMap.set(node.getKey(), node);
+    }
+  }
+  for (const [key, prevNode] of blockMap) {
+    const element = $createElement();
+    $afterCreateElement(prevNode, element);
+    prevNode.replace(element, true);
+    if (newSelection) {
+      if (key === newSelection.anchor.key) {
+        newSelection.anchor.set(
+          element.getKey(),
+          newSelection.anchor.offset,
+          newSelection.anchor.type,
+        );
+      }
+      if (key === newSelection.focus.key) {
+        newSelection.focus.set(
+          element.getKey(),
+          newSelection.focus.offset,
+          newSelection.focus.type,
+        );
+      }
+    }
+  }
+  if (newSelection && selection.is($getSelection())) {
+    $setSelection(newSelection);
+  }
+}
+
+function isPointAttached(point: Point): boolean {
+  return point.getNode().isAttached();
+}
 
 function $removeParentEmptyElements(startingNode: ElementNode): void {
   let node: ElementNode | null = startingNode;
@@ -41,7 +132,7 @@ function $removeParentEmptyElements(startingNode: ElementNode): void {
     const latest = node.getLatest();
     const parentNode: ElementNode | null = node.getParent<ElementNode>();
 
-    if (latest.__children.length === 0) {
+    if (latest.getChildrenSize() === 0) {
       node.remove(true);
     }
 
@@ -49,34 +140,29 @@ function $removeParentEmptyElements(startingNode: ElementNode): void {
   }
 }
 
-function isPointAttached(point: Point): boolean {
-  return point.getNode().isAttached();
-}
-
 /**
- * Attempts to wrap all nodes in the Selection in ElementNodes returned from createElement.
- * If wrappingElement is provided, all of the wrapped leaves are appended to the wrappingElement.
- * It attempts to append the resulting sub-tree to the nearest safe insertion target.
- *
- * @param selection
- * @param createElement
- * @param wrappingElement
- * @returns
+ * @deprecated
+ * Wraps all nodes in the selection into another node of the type returned by createElement.
+ * @param selection - The selection of nodes to be wrapped.
+ * @param createElement - A function that creates the wrapping ElementNode. eg. $createParagraphNode.
+ * @param wrappingElement - An element to append the wrapped selection and its children to.
  */
 export function $wrapNodes(
-  selection: RangeSelection | GridSelection,
+  selection: BaseSelection,
   createElement: () => ElementNode,
   wrappingElement: null | ElementNode = null,
 ): void {
+  const anchorAndFocus = selection.getStartEndPoints();
+  const anchor = anchorAndFocus ? anchorAndFocus[0] : null;
   const nodes = selection.getNodes();
   const nodesLength = nodes.length;
-  const anchor = selection.anchor;
 
   if (
-    nodesLength === 0 ||
-    (nodesLength === 1 &&
-      anchor.type === 'element' &&
-      anchor.getNode().getChildrenSize() === 0)
+    anchor !== null &&
+    (nodesLength === 0 ||
+      (nodesLength === 1 &&
+        anchor.type === 'element' &&
+        anchor.getNode().getChildrenSize() === 0))
   ) {
     const target =
       anchor.type === 'text'
@@ -140,8 +226,17 @@ export function $wrapNodes(
   );
 }
 
+/**
+ * Wraps each node into a new ElementNode.
+ * @param selection - The selection of nodes to wrap.
+ * @param nodes - An array of nodes, generally the descendants of the selection.
+ * @param nodesLength - The length of nodes.
+ * @param createElement - A function that creates the wrapping ElementNode. eg. $createParagraphNode.
+ * @param wrappingElement - An element to wrap all the nodes into.
+ * @returns
+ */
 export function $wrapNodesImpl(
-  selection: RangeSelection | GridSelection,
+  selection: BaseSelection,
   nodes: LexicalNode[],
   nodesLength: number,
   createElement: () => ElementNode,
@@ -233,6 +328,10 @@ export function $wrapNodesImpl(
         $removeParentEmptyElements(parent);
       }
     } else if (emptyElements.has(node.getKey())) {
+      invariant(
+        $isElementNode(node),
+        'Expected node in emptyElements to be an ElementNode',
+      );
       const targetElement = createElement();
       targetElement.setFormat(node.getFormatType());
       targetElement.setIndent(node.getIndent());
@@ -247,6 +346,7 @@ export function $wrapNodesImpl(
       wrappingElement.append(element);
     }
   }
+  let lastElement = null;
 
   // If our target is Root-like, let's see if we can re-adjust
   // so that the target is the first child instead.
@@ -274,6 +374,7 @@ export function $wrapNodesImpl(
           for (let i = 0; i < elements.length; i++) {
             const element = elements[i];
             target.append(element);
+            lastElement = element;
           }
         }
       } else {
@@ -283,6 +384,7 @@ export function $wrapNodesImpl(
           for (let i = 0; i < elements.length; i++) {
             const element = elements[i];
             firstChild.insertBefore(element);
+            lastElement = element;
           }
         }
       }
@@ -294,6 +396,7 @@ export function $wrapNodesImpl(
       for (let i = elements.length - 1; i >= 0; i--) {
         const element = elements[i];
         target.insertAfter(element);
+        lastElement = element;
       }
     }
   }
@@ -306,20 +409,50 @@ export function $wrapNodesImpl(
     isPointAttached(prevSelection.focus)
   ) {
     $setSelection(prevSelection.clone());
+  } else if (lastElement !== null) {
+    lastElement.selectEnd();
   } else {
     selection.dirty = true;
   }
 }
 
+/**
+ * Determines if the default character selection should be overridden. Used with DecoratorNodes
+ * @param selection - The selection whose default character selection may need to be overridden.
+ * @param isBackward - Is the selection backwards (the focus comes before the anchor)?
+ * @returns true if it should be overridden, false if not.
+ */
 export function $shouldOverrideDefaultCharacterSelection(
   selection: RangeSelection,
   isBackward: boolean,
 ): boolean {
-  const possibleNode = $getDecoratorNode(selection.focus, isBackward);
-
-  return $isDecoratorNode(possibleNode) && !possibleNode.isIsolated();
+  const focusCaret = $caretFromPoint(
+    selection.focus,
+    isBackward ? 'previous' : 'next',
+  );
+  if ($isExtendableTextPointCaret(focusCaret)) {
+    return false;
+  }
+  for (const nextCaret of $extendCaretToRange(focusCaret)) {
+    if ($isChildCaret(nextCaret)) {
+      return !nextCaret.origin.isInline();
+    } else if ($isElementNode(nextCaret.origin)) {
+      continue;
+    } else if ($isDecoratorNode(nextCaret.origin)) {
+      return true;
+    }
+    break;
+  }
+  return false;
 }
 
+/**
+ * Moves the selection according to the arguments.
+ * @param selection - The selected text or nodes.
+ * @param isHoldingShift - Is the shift key being held down during the operation.
+ * @param isBackward - Is the selection selected backwards (the focus comes before the anchor)?
+ * @param granularity - The distance to adjust the current selection.
+ */
 export function $moveCaretSelection(
   selection: RangeSelection,
   isHoldingShift: boolean,
@@ -329,6 +462,11 @@ export function $moveCaretSelection(
   selection.modify(isHoldingShift ? 'extend' : 'move', isBackward, granularity);
 }
 
+/**
+ * Tests a parent element for right to left direction.
+ * @param selection - The selection whose parent is to be tested.
+ * @returns true if the selections' parent element has a direction of 'rtl' (right to left), false otherwise.
+ */
 export function $isParentElementRTL(selection: RangeSelection): boolean {
   const anchorNode = selection.anchor.getNode();
   const parent = $isRootNode(anchorNode)
@@ -338,6 +476,12 @@ export function $isParentElementRTL(selection: RangeSelection): boolean {
   return parent.getDirection() === 'rtl';
 }
 
+/**
+ * Moves selection by character according to arguments.
+ * @param selection - The selection of the characters to move.
+ * @param isHoldingShift - Is the shift key being held down during the operation.
+ * @param isBackward - Is the selection backward (the focus comes before the anchor)?
+ */
 export function $moveCharacter(
   selection: RangeSelection,
   isHoldingShift: boolean,
@@ -352,223 +496,13 @@ export function $moveCharacter(
   );
 }
 
-export function $selectAll(selection: RangeSelection): void {
-  const anchor = selection.anchor;
-  const focus = selection.focus;
-  const anchorNode = anchor.getNode();
-  const topParent = anchorNode.getTopLevelElementOrThrow();
-  const root = topParent.getParentOrThrow();
-  let firstNode = root.getFirstDescendant();
-  let lastNode = root.getLastDescendant();
-  let firstType: 'element' | 'text' = 'element';
-  let lastType: 'element' | 'text' = 'element';
-  let lastOffset = 0;
-
-  if ($isTextNode(firstNode)) {
-    firstType = 'text';
-  } else if (!$isElementNode(firstNode) && firstNode !== null) {
-    firstNode = firstNode.getParentOrThrow();
-  }
-
-  if ($isTextNode(lastNode)) {
-    lastType = 'text';
-    lastOffset = lastNode.getTextContentSize();
-  } else if (!$isElementNode(lastNode) && lastNode !== null) {
-    lastNode = lastNode.getParentOrThrow();
-  }
-
-  if (firstNode && lastNode) {
-    anchor.set(firstNode.getKey(), 0, firstType);
-    focus.set(lastNode.getKey(), lastOffset, lastType);
-  }
-}
-
-function $getIndexFromPossibleClone(
-  node: LexicalNode,
-  parent: ElementNode,
-  nodeMap: Map<NodeKey, LexicalNode>,
-): number {
-  const parentClone = nodeMap.get(parent.getKey());
-
-  if ($isElementNode(parentClone)) {
-    return parentClone.__children.indexOf(node.getKey());
-  }
-
-  return node.getIndexWithinParent();
-}
-
-function $getParentAvoidingExcludedElements(
-  node: LexicalNode,
-): ElementNode | null {
-  let parent = node.getParent();
-
-  while (parent !== null && parent.excludeFromCopy('clone')) {
-    parent = parent.getParent();
-  }
-
-  return parent;
-}
-
-function $copyLeafNodeBranchToRoot(
-  leaf: LexicalNode,
-  startingOffset: number | undefined,
-  endingOffset: number | undefined,
-  isLeftSide: boolean,
-  range: Array<NodeKey>,
-  nodeMap: Map<NodeKey, LexicalNode>,
-): void {
-  let node = leaf;
-  let offset = startingOffset;
-
-  while (node !== null) {
-    const parent = $getParentAvoidingExcludedElements(node);
-
-    if (parent === null) {
-      break;
-    }
-
-    if (!$isElementNode(node) || !node.excludeFromCopy('clone')) {
-      const key = node.getKey();
-      let clone = nodeMap.get(key);
-      const needsClone = clone === undefined;
-
-      if (needsClone) {
-        clone = $cloneWithProperties<LexicalNode>(node);
-        nodeMap.set(key, clone);
-      }
-
-      if ($isTextNode(clone) && !clone.isSegmented() && !clone.isToken()) {
-        clone.__text = clone.__text.slice(
-          isLeftSide ? offset : 0,
-          isLeftSide ? endingOffset : offset,
-        );
-      } else if ($isElementNode(clone)) {
-        clone.__children = clone.__children.slice(
-          isLeftSide ? offset : 0,
-          isLeftSide ? undefined : (offset || 0) + 1,
-        );
-      }
-
-      if ($isRootNode(parent)) {
-        if (needsClone) {
-          // We only want to collect a range of top level nodes.
-          // So if the parent is the root, we know this is a top level.
-          range.push(key);
-        }
-
-        break;
-      }
-    }
-
-    offset = $getIndexFromPossibleClone(node, parent, nodeMap);
-    node = parent;
-  }
-}
-
-export function $cloneRangeSelectionContent(
-  selection: RangeSelection,
-): ICloneSelectionContent {
-  const anchor = selection.anchor;
-  const focus = selection.focus;
-  const [anchorOffset, focusOffset] = selection.getCharacterOffsets();
-  const nodes = selection.getNodes();
-
-  if (
-    nodes.length === 0 ||
-    (nodes.length === 1 &&
-      $isElementNode(nodes[0]) &&
-      nodes[0].excludeFromCopy('clone'))
-  ) {
-    return {
-      nodeMap: [],
-      range: [],
-    };
-  }
-
-  // Check if we can use the parent of the nodes, if the
-  // parent can't be empty, then it's important that we
-  // also copy that element node along with its children.
-  let nodesLength = nodes.length;
-  const firstNode = nodes[0];
-  const firstNodeParent = firstNode.getParent();
-
-  if (
-    firstNodeParent !== null &&
-    (!firstNodeParent.canBeEmpty() || $isRootNode(firstNodeParent))
-  ) {
-    const parentChildren = firstNodeParent.__children;
-    const parentChildrenLength = parentChildren.length;
-
-    if (parentChildrenLength === nodesLength) {
-      let areTheSame = true;
-
-      for (let i = 0; i < parentChildren.length; i++) {
-        if (parentChildren[i] !== nodes[i].__key) {
-          areTheSame = false;
-          break;
-        }
-      }
-
-      if (areTheSame) {
-        nodesLength++;
-        nodes.push(firstNodeParent);
-      }
-    }
-  }
-
-  const lastNode = nodes[nodesLength - 1];
-  const isBefore = anchor.isBefore(focus);
-  const nodeMap = new Map();
-  const range: Array<NodeKey> = [];
-  const isOnlyText = $isTextNode(firstNode) && nodesLength === 1;
-
-  // Do first node to root
-  $copyLeafNodeBranchToRoot(
-    firstNode,
-    isBefore ? anchorOffset : focusOffset,
-    isOnlyText ? (isBefore ? focusOffset : anchorOffset) : undefined,
-    true,
-    range,
-    nodeMap,
-  );
-
-  // Copy all nodes between
-  for (let i = 0; i < nodesLength; i++) {
-    const node = nodes[i];
-    const key = node.getKey();
-
-    if (
-      !nodeMap.has(key) &&
-      (!$isElementNode(node) || !node.excludeFromCopy('clone'))
-    ) {
-      const clone = $cloneWithProperties<LexicalNode>(node);
-
-      if ($isRootNode(node.getParent())) {
-        range.push(node.getKey());
-      }
-
-      if (key !== 'root') {
-        nodeMap.set(key, clone);
-      }
-    }
-  }
-
-  // Do last node to root
-  $copyLeafNodeBranchToRoot(
-    lastNode,
-    isOnlyText ? undefined : isBefore ? focusOffset : anchorOffset,
-    undefined,
-    false,
-    range,
-    nodeMap,
-  );
-
-  return {
-    nodeMap: Array.from(nodeMap.entries()),
-    range,
-  };
-}
-
+/**
+ * Returns the current value of a CSS property for Nodes, if set. If not set, it returns the defaultValue.
+ * @param node - The node whose style value to get.
+ * @param styleProperty - The CSS style property.
+ * @param defaultValue - The default value for the property.
+ * @returns The value of the property for node.
+ */
 function $getNodeStyleValueForProperty(
   node: TextNode,
   styleProperty: string,
@@ -584,18 +518,39 @@ function $getNodeStyleValueForProperty(
   return defaultValue;
 }
 
+/**
+ * Returns the current value of a CSS property for TextNodes in the Selection, if set. If not set, it returns the defaultValue.
+ * If all TextNodes do not have the same value, it returns an empty string.
+ * @param selection - The selection of TextNodes whose value to find.
+ * @param styleProperty - The CSS style property.
+ * @param defaultValue - The default value for the property, defaults to an empty string.
+ * @returns The value of the property for the selected TextNodes.
+ */
 export function $getSelectionStyleValueForProperty(
-  selection: RangeSelection,
+  selection: RangeSelection | TableSelection,
   styleProperty: string,
   defaultValue = '',
 ): string {
-  let styleValue = null;
+  let styleValue: string | null = null;
   const nodes = selection.getNodes();
   const anchor = selection.anchor;
   const focus = selection.focus;
   const isBackward = selection.isBackward();
   const endOffset = isBackward ? focus.offset : anchor.offset;
   const endNode = isBackward ? focus.getNode() : anchor.getNode();
+
+  if (
+    $isRangeSelection(selection) &&
+    selection.isCollapsed() &&
+    selection.style !== ''
+  ) {
+    const css = selection.style;
+    const styleObject = getStyleObjectFromCSS(css);
+
+    if (styleObject !== null && styleProperty in styleObject) {
+      return styleObject[styleProperty];
+    }
+  }
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
@@ -618,7 +573,7 @@ export function $getSelectionStyleValueForProperty(
         styleValue = nodeStyleValue;
       } else if (styleValue !== nodeStyleValue) {
         // multiple text nodes are in the selection and they don't all
-        // have the same font size.
+        // have the same style.
         styleValue = '';
         break;
       }
@@ -626,4 +581,15 @@ export function $getSelectionStyleValueForProperty(
   }
 
   return styleValue === null ? defaultValue : styleValue;
+}
+
+export function $getAncestor<NodeType extends LexicalNode = LexicalNode>(
+  node: LexicalNode,
+  predicate: (ancestor: LexicalNode) => ancestor is NodeType,
+) {
+  let parent = node;
+  while (parent !== null && parent.getParent() !== null && !predicate(parent)) {
+    parent = parent.getParentOrThrow();
+  }
+  return predicate(parent) ? parent : null;
 }

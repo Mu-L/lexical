@@ -9,10 +9,12 @@
 import type {
   ElementFormatType,
   LexicalNode,
+  LexicalUpdateJSON,
   NodeKey,
   SerializedLexicalNode,
   Spread,
 } from 'lexical';
+import type {JSX} from 'react';
 
 import {DecoratorNode} from 'lexical';
 
@@ -33,10 +35,21 @@ export class DecoratorBlockNode extends DecoratorNode<JSX.Element> {
 
   exportJSON(): SerializedDecoratorBlockNode {
     return {
+      ...super.exportJSON(),
       format: this.__format || '',
-      type: 'decorator-block',
-      version: 1,
     };
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedDecoratorBlockNode>,
+  ): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setFormat(serializedNode.format || '');
+  }
+
+  canIndent(): false {
+    return false;
   }
 
   createDOM(): HTMLElement {
@@ -47,9 +60,14 @@ export class DecoratorBlockNode extends DecoratorNode<JSX.Element> {
     return false;
   }
 
-  setFormat(format: ElementFormatType): void {
+  setFormat(format: ElementFormatType): this {
     const self = this.getWritable();
     self.__format = format;
+    return self;
+  }
+
+  isInline(): false {
+    return false;
   }
 }
 

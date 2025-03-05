@@ -59,6 +59,10 @@ declare module 'prismjs/components/prism-sql' {
   declare module.exports: {};
 }
 
+declare module 'prismjs/components/prism-powershell' {
+  declare module.exports: {};
+}
+
 declare module 'prismjs/components/prism-python' {
   declare module.exports: {};
 }
@@ -68,5 +72,17 @@ declare module 'prismjs/components/prism-rust' {
 }
 
 declare module 'prismjs/components/prism-swift' {
+  declare module.exports: {};
+}
+
+declare module 'prismjs/components/prism-typescript' {
+  declare module.exports: {};
+}
+
+declare module 'prismjs/components/prism-java' {
+  declare module.exports: {};
+}
+
+declare module 'prismjs/components/prism-cpp' {
   declare module.exports: {};
 }

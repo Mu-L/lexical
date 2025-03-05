@@ -13,11 +13,18 @@ import type {
   TextModeType,
 } from './nodes/LexicalTextNode';
 
-import {IS_FIREFOX, IS_IOS, IS_SAFARI} from 'shared/environment';
+import {
+  IS_APPLE_WEBKIT,
+  IS_FIREFOX,
+  IS_IOS,
+  IS_SAFARI,
+} from 'shared/environment';
 
 // DOM
 export const DOM_ELEMENT_TYPE = 1;
 export const DOM_TEXT_TYPE = 3;
+export const DOM_DOCUMENT_TYPE = 9;
+export const DOM_DOCUMENT_FRAGMENT_TYPE = 11;
 
 // Reconciling
 export const NO_DIRTY_NODES = 0;
@@ -38,6 +45,10 @@ export const IS_UNDERLINE = 1 << 3;
 export const IS_CODE = 1 << 4;
 export const IS_SUBSCRIPT = 1 << 5;
 export const IS_SUPERSCRIPT = 1 << 6;
+export const IS_HIGHLIGHT = 1 << 7;
+export const IS_LOWERCASE = 1 << 8;
+export const IS_UPPERCASE = 1 << 9;
+export const IS_CAPITALIZE = 1 << 10;
 
 export const IS_ALL_FORMATTING =
   IS_BOLD |
@@ -46,7 +57,11 @@ export const IS_ALL_FORMATTING =
   IS_UNDERLINE |
   IS_CODE |
   IS_SUBSCRIPT |
-  IS_SUPERSCRIPT;
+  IS_SUPERSCRIPT |
+  IS_HIGHLIGHT |
+  IS_LOWERCASE |
+  IS_UPPERCASE |
+  IS_CAPITALIZE;
 
 // Text node details
 export const IS_DIRECTIONLESS = 1;
@@ -57,6 +72,8 @@ export const IS_ALIGN_LEFT = 1;
 export const IS_ALIGN_CENTER = 2;
 export const IS_ALIGN_RIGHT = 3;
 export const IS_ALIGN_JUSTIFY = 4;
+export const IS_ALIGN_START = 5;
+export const IS_ALIGN_END = 6;
 
 // Reconciliation
 export const NON_BREAKING_SPACE = '\u00A0';
@@ -65,7 +82,9 @@ const ZERO_WIDTH_SPACE = '\u200b';
 // For iOS/Safari we use a non breaking space, otherwise the cursor appears
 // overlapping the composed text.
 export const COMPOSITION_SUFFIX: string =
-  IS_SAFARI || IS_IOS ? NON_BREAKING_SPACE : ZERO_WIDTH_SPACE;
+  IS_SAFARI || IS_IOS || IS_APPLE_WEBKIT
+    ? NON_BREAKING_SPACE
+    : ZERO_WIDTH_SPACE;
 export const DOUBLE_LINE_BREAK = '\n\n';
 
 // For FF, we need to use a non-breaking space, or it gets composition
@@ -86,12 +105,16 @@ export const LTR_REGEX = new RegExp('^[^' + RTL + ']*[' + LTR + ']');
 
 export const TEXT_TYPE_TO_FORMAT: Record<TextFormatType | string, number> = {
   bold: IS_BOLD,
+  capitalize: IS_CAPITALIZE,
   code: IS_CODE,
+  highlight: IS_HIGHLIGHT,
   italic: IS_ITALIC,
+  lowercase: IS_LOWERCASE,
   strikethrough: IS_STRIKETHROUGH,
   subscript: IS_SUBSCRIPT,
   superscript: IS_SUPERSCRIPT,
   underline: IS_UNDERLINE,
+  uppercase: IS_UPPERCASE,
 };
 
 export const DETAIL_TYPE_TO_DETAIL: Record<TextDetailType | string, number> = {
@@ -104,16 +127,20 @@ export const ELEMENT_TYPE_TO_FORMAT: Record<
   number
 > = {
   center: IS_ALIGN_CENTER,
+  end: IS_ALIGN_END,
   justify: IS_ALIGN_JUSTIFY,
   left: IS_ALIGN_LEFT,
   right: IS_ALIGN_RIGHT,
+  start: IS_ALIGN_START,
 };
 
 export const ELEMENT_FORMAT_TO_TYPE: Record<number, ElementFormatType> = {
   [IS_ALIGN_CENTER]: 'center',
+  [IS_ALIGN_END]: 'end',
   [IS_ALIGN_JUSTIFY]: 'justify',
   [IS_ALIGN_LEFT]: 'left',
   [IS_ALIGN_RIGHT]: 'right',
+  [IS_ALIGN_START]: 'start',
 };
 
 export const TEXT_MODE_TO_TYPE: Record<TextModeType, 0 | 1 | 2> = {
@@ -127,3 +154,5 @@ export const TEXT_TYPE_TO_MODE: Record<number, TextModeType> = {
   [IS_SEGMENTED]: 'segmented',
   [IS_TOKEN]: 'token',
 };
+
+export const NODE_STATE_KEY = '$';

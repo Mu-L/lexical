@@ -6,14 +6,13 @@
  *
  */
 
-import type {Binding} from '@lexical/yjs';
+import type {Binding, Provider, SyncCursorPositionsFn} from '@lexical/yjs';
 import type {LexicalEditor} from 'lexical';
-import type {Doc, Transaction, YEvent} from 'yjs';
+import type {JSX} from 'react';
 
 import {mergeRegister} from '@lexical/utils';
 import {
   CONNECTED_COMMAND,
-  createBinding,
   createUndoManager,
   initLocalState,
   setLocalStateFocus,
@@ -27,15 +26,17 @@ import {
   $getRoot,
   $getSelection,
   BLUR_COMMAND,
+  CAN_REDO_COMMAND,
+  CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_EDITOR,
   FOCUS_COMMAND,
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
 import * as React from 'react';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef} from 'react';
 import {createPortal} from 'react-dom';
-import {WebsocketProvider} from 'y-websocket';
+import {Doc, Transaction, UndoManager, YEvent} from 'yjs';
 
 import {InitialEditorStateType} from '../LexicalComposer';
 
@@ -44,25 +45,21 @@ export type CursorsContainerRef = React.MutableRefObject<HTMLElement | null>;
 export function useYjsCollaboration(
   editor: LexicalEditor,
   id: string,
-  provider: WebsocketProvider,
+  provider: Provider,
   docMap: Map<string, Doc>,
   name: string,
   color: string,
   shouldBootstrap: boolean,
+  binding: Binding,
+  setDoc: React.Dispatch<React.SetStateAction<Doc | undefined>>,
   cursorsContainerRef?: CursorsContainerRef,
   initialEditorState?: InitialEditorStateType,
-): [JSX.Element, Binding] {
+  awarenessData?: object,
+  syncCursorPositionsFn: SyncCursorPositionsFn = syncCursorPositions,
+): JSX.Element {
   const isReloadingDoc = useRef(false);
-  const [doc, setDoc] = useState(docMap.get(id));
 
-  const binding = useMemo(
-    () => createBinding(editor, provider, id, doc, docMap),
-    [editor, provider, id, docMap, doc],
-  );
-
-  const connect = useCallback(() => {
-    provider.connect();
-  }, [provider]);
+  const connect = useCallback(() => provider.connect(), [provider]);
 
   const disconnect = useCallback(() => {
     try {
@@ -95,7 +92,7 @@ export function useYjsCollaboration(
     };
 
     const onAwarenessUpdate = () => {
-      syncCursorPositions(binding, provider);
+      syncCursorPositionsFn(binding, provider);
     };
 
     const onYjsTreeChanges = (
@@ -104,8 +101,16 @@ export function useYjsCollaboration(
       events: Array<YEvent<any>>,
       transaction: Transaction,
     ) => {
-      if (transaction.origin !== binding) {
-        syncYjsChangesToLexical(binding, provider, events);
+      const origin = transaction.origin;
+      if (origin !== binding) {
+        const isFromUndoManger = origin instanceof UndoManager;
+        syncYjsChangesToLexical(
+          binding,
+          provider,
+          events,
+          isFromUndoManger,
+          syncCursorPositionsFn,
+        );
       }
     };
 
@@ -114,6 +119,7 @@ export function useYjsCollaboration(
       name,
       color,
       document.activeElement === editor.getRootElement(),
+      awarenessData || {},
     );
 
     const onProviderDocReload = (ydoc: Doc) => {
@@ -152,11 +158,23 @@ export function useYjsCollaboration(
         }
       },
     );
-    connect();
+
+    const connectionPromise = connect();
 
     return () => {
       if (isReloadingDoc.current === false) {
-        disconnect();
+        if (connectionPromise) {
+          connectionPromise.then(disconnect);
+        } else {
+          // Workaround for race condition in StrictMode. It's possible there
+          // is a different race for the above case where connect returns a
+          // promise, but we don't have an example of that in-repo.
+          // It's possible that there is a similar issue with
+          // TOGGLE_CONNECT_COMMAND below when the provider connect returns a
+          // promise.
+          // https://github.com/facebook/lexical/issues/6640
+          disconnect();
+        }
       }
 
       provider.off('sync', onSync);
@@ -179,6 +197,9 @@ export function useYjsCollaboration(
     name,
     provider,
     shouldBootstrap,
+    awarenessData,
+    setDoc,
+    syncCursorPositionsFn,
   ]);
   const cursorsContainer = useMemo(() => {
     const ref = (element: null | HTMLElement) => {
@@ -195,18 +216,16 @@ export function useYjsCollaboration(
     return editor.registerCommand(
       TOGGLE_CONNECT_COMMAND,
       (payload) => {
-        if (connect !== undefined && disconnect !== undefined) {
-          const shouldConnect = payload;
+        const shouldConnect = payload;
 
-          if (shouldConnect) {
-            // eslint-disable-next-line no-console
-            console.log('Collaboration connected!');
-            connect();
-          } else {
-            // eslint-disable-next-line no-console
-            console.log('Collaboration disconnected!');
-            disconnect();
-          }
+        if (shouldConnect) {
+          // eslint-disable-next-line no-console
+          console.log('Collaboration connected!');
+          connect();
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('Collaboration disconnected!');
+          disconnect();
         }
 
         return true;
@@ -215,35 +234,36 @@ export function useYjsCollaboration(
     );
   }, [connect, disconnect, editor]);
 
-  return [cursorsContainer, binding];
+  return cursorsContainer;
 }
 
 export function useYjsFocusTracking(
   editor: LexicalEditor,
-  provider: WebsocketProvider,
+  provider: Provider,
   name: string,
   color: string,
+  awarenessData?: object,
 ) {
   useEffect(() => {
     return mergeRegister(
       editor.registerCommand(
         FOCUS_COMMAND,
-        (payload) => {
-          setLocalStateFocus(provider, name, color, true);
-          return true;
+        () => {
+          setLocalStateFocus(provider, name, color, true, awarenessData || {});
+          return false;
         },
         COMMAND_PRIORITY_EDITOR,
       ),
       editor.registerCommand(
         BLUR_COMMAND,
-        (payload) => {
-          setLocalStateFocus(provider, name, color, false);
-          return true;
+        () => {
+          setLocalStateFocus(provider, name, color, false, awarenessData || {});
+          return false;
         },
         COMMAND_PRIORITY_EDITOR,
       ),
     );
-  }, [color, editor, name, provider]);
+  }, [color, editor, name, provider, awarenessData]);
 }
 
 export function useYjsHistory(
@@ -286,6 +306,29 @@ export function useYjsHistory(
   const clearHistory = useCallback(() => {
     undoManager.clear();
   }, [undoManager]);
+
+  // Exposing undo and redo states
+  React.useEffect(() => {
+    const updateUndoRedoStates = () => {
+      editor.dispatchCommand(
+        CAN_UNDO_COMMAND,
+        undoManager.undoStack.length > 0,
+      );
+      editor.dispatchCommand(
+        CAN_REDO_COMMAND,
+        undoManager.redoStack.length > 0,
+      );
+    };
+    undoManager.on('stack-item-added', updateUndoRedoStates);
+    undoManager.on('stack-item-popped', updateUndoRedoStates);
+    undoManager.on('stack-cleared', updateUndoRedoStates);
+    return () => {
+      undoManager.off('stack-item-added', updateUndoRedoStates);
+      undoManager.off('stack-item-popped', updateUndoRedoStates);
+      undoManager.off('stack-cleared', updateUndoRedoStates);
+    };
+  }, [editor, undoManager]);
+
   return clearHistory;
 }
 

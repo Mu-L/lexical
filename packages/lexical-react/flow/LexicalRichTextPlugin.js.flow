@@ -7,8 +7,11 @@
  * @flow strict
  */
 
-import type {ErrorBoundaryType} from './DEPRECATED_useLexicalDecorators';
 import type {EditorState, LexicalEditor} from 'lexical';
+
+import {typeof LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
+
+import * as React from 'react';
 
 type InitialEditorStateType =
   | null
@@ -17,7 +20,10 @@ type InitialEditorStateType =
   | ((editor: LexicalEditor) => void);
 
 declare export function RichTextPlugin({
-  contentEditable: React$Node,
-  placeholder: React$Node,
-  ErrorBoundary: ErrorBoundaryType,
-}): React$Node;
+  contentEditable: React.Node,
+  placeholder?:
+  | ((isEditable: boolean) => null | React.Node)
+  | null
+  | React.Node;
+  ErrorBoundary: LexicalErrorBoundary,
+}): React.Node;

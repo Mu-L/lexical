@@ -8,10 +8,9 @@
 
 import type {LexicalEditor} from 'lexical';
 
-import {TOGGLE_CONNECT_COMMAND} from '@lexical/yjs';
+import {Provider, TOGGLE_CONNECT_COMMAND} from '@lexical/yjs';
 import {COMMAND_PRIORITY_LOW} from 'lexical';
 import {useEffect, useState} from 'react';
-import {WebsocketProvider} from 'y-websocket';
 import {
   Array as YArray,
   Map as YMap,
@@ -42,7 +41,7 @@ function createUID(): string {
   return Math.random()
     .toString(36)
     .replace(/[^a-z]+/g, '')
-    .substr(0, 5);
+    .substring(0, 5);
 }
 
 export function createComment(
@@ -57,7 +56,10 @@ export function createComment(
     content,
     deleted: deleted === undefined ? false : deleted,
     id: id === undefined ? createUID() : id,
-    timeStamp: timeStamp === undefined ? performance.now() : timeStamp,
+    timeStamp:
+      timeStamp === undefined
+        ? performance.timeOrigin + performance.now()
+        : timeStamp,
     type: 'comment',
   };
 }
@@ -106,7 +108,7 @@ export class CommentStore {
   _editor: LexicalEditor;
   _comments: Comments;
   _changeListeners: Set<() => void>;
-  _collabProvider: null | WebsocketProvider;
+  _collabProvider: null | Provider;
 
   constructor(editor: LexicalEditor) {
     this._comments = [];
@@ -231,7 +233,7 @@ export class CommentStore {
   _withRemoteTransaction(fn: () => void): void {
     const provider = this._collabProvider;
     if (provider !== null) {
-      // @ts-ignore doc does exist
+      // @ts-expect-error doc does exist
       const doc = provider.doc;
       doc.transact(fn, this);
     }
@@ -251,7 +253,7 @@ export class CommentStore {
   _getCollabComments(): null | YArray<any> {
     const provider = this._collabProvider;
     if (provider !== null) {
-      // @ts-ignore doc does exist
+      // @ts-expect-error doc does exist
       const doc = provider.doc;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return doc.get('comments', YArray) as YArray<any>;
@@ -283,7 +285,7 @@ export class CommentStore {
     return sharedMap;
   }
 
-  registerCollaboration(provider: WebsocketProvider): () => void {
+  registerCollaboration(provider: Provider): () => void {
     this._collabProvider = provider;
     const sharedCommentsArray = this._getCollabComments();
 
@@ -351,51 +353,53 @@ export class CommentStore {
                       | undefined);
 
               if (Array.isArray(insert)) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                insert.forEach((map: YMap<any>) => {
-                  const id = map.get('id');
-                  const type = map.get('type');
+                insert
+                  .slice()
+                  .reverse()
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .forEach((map: YMap<any>) => {
+                    const id = map.get('id');
+                    const type = map.get('type');
 
-                  const commentOrThread =
-                    type === 'thread'
-                      ? createThread(
-                          map.get('quote'),
-                          map
-                            .get('comments')
-                            .toArray()
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            .map(
-                              (
-                                innerComment: Map<
-                                  string,
-                                  string | number | boolean
-                                >,
-                              ) =>
-                                createComment(
-                                  innerComment.get('content') as string,
-                                  innerComment.get('author') as string,
-                                  innerComment.get('id') as string,
-                                  innerComment.get('timeStamp') as number,
-                                  innerComment.get('deleted') as boolean,
-                                ),
-                            ),
-                          id,
-                        )
-                      : createComment(
-                          map.get('content'),
-                          map.get('author'),
-                          id,
-                          map.get('timeStamp'),
-                          map.get('deleted'),
-                        );
-                  this._withLocalTransaction(() => {
-                    this.addComment(
-                      commentOrThread,
-                      parentThread as Thread,
-                      offset,
-                    );
+                    const commentOrThread =
+                      type === 'thread'
+                        ? createThread(
+                            map.get('quote'),
+                            map
+                              .get('comments')
+                              .toArray()
+                              .map(
+                                (
+                                  innerComment: Map<
+                                    string,
+                                    string | number | boolean
+                                  >,
+                                ) =>
+                                  createComment(
+                                    innerComment.get('content') as string,
+                                    innerComment.get('author') as string,
+                                    innerComment.get('id') as string,
+                                    innerComment.get('timeStamp') as number,
+                                    innerComment.get('deleted') as boolean,
+                                  ),
+                              ),
+                            id,
+                          )
+                        : createComment(
+                            map.get('content'),
+                            map.get('author'),
+                            id,
+                            map.get('timeStamp'),
+                            map.get('deleted'),
+                          );
+                    this._withLocalTransaction(() => {
+                      this.addComment(
+                        commentOrThread,
+                        parentThread as Thread,
+                        offset,
+                      );
+                    });
                   });
-                });
               } else if (typeof retain === 'number') {
                 offset += retain;
               } else if (typeof del === 'number') {

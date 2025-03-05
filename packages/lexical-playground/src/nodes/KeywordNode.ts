@@ -6,22 +6,11 @@
  *
  */
 
-import type {
-  EditorConfig,
-  LexicalNode,
-  SerializedTextNode,
-  Spread,
-} from 'lexical';
+import type {EditorConfig, LexicalNode, SerializedTextNode} from 'lexical';
 
-import {TextNode} from 'lexical';
+import {$applyNodeReplacement, TextNode} from 'lexical';
 
-export type SerializedKeywordNode = Spread<
-  {
-    type: 'keyword';
-    version: 1;
-  },
-  SerializedTextNode
->;
+export type SerializedKeywordNode = SerializedTextNode;
 
 export class KeywordNode extends TextNode {
   static getType(): string {
@@ -33,20 +22,7 @@ export class KeywordNode extends TextNode {
   }
 
   static importJSON(serializedNode: SerializedKeywordNode): KeywordNode {
-    const node = $createKeywordNode(serializedNode.text);
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
-  }
-
-  exportJSON(): SerializedKeywordNode {
-    return {
-      ...super.exportJSON(),
-      type: 'keyword',
-      version: 1,
-    };
+    return $createKeywordNode().updateFromJSON(serializedNode);
   }
 
   createDOM(config: EditorConfig): HTMLElement {
@@ -69,12 +45,10 @@ export class KeywordNode extends TextNode {
   }
 }
 
-export function $createKeywordNode(keyword: string): KeywordNode {
-  return new KeywordNode(keyword);
+export function $createKeywordNode(keyword: string = ''): KeywordNode {
+  return $applyNodeReplacement(new KeywordNode(keyword));
 }
 
-export function $isKeywordNode(
-  node: LexicalNode | null | undefined | undefined,
-): boolean {
+export function $isKeywordNode(node: LexicalNode | null | undefined): boolean {
   return node instanceof KeywordNode;
 }
